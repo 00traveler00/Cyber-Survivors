@@ -6833,13 +6833,6 @@ class SkillTreeUI {
         let lastClientX = 0;
         let lastClientY = 0;
         let hasDragged = false;
-
-        let startTouchX = 0;
-        let startTouchY = 0;
-
-        let lastClientX = 0;
-        let lastClientY = 0;
-        let hasDragged = false;
         let startTouchX = 0;
         let startTouchY = 0;
 
@@ -6860,7 +6853,8 @@ class SkillTreeUI {
 
         const doDrag = (e) => {
             if (this.isDragging) {
-                if (Math.hypot(e.clientX - startTouchX, e.clientY - startTouchY) > 10) {
+                const dist = Math.hypot(e.clientX - startTouchX, e.clientY - startTouchY);
+                if (dist > 10) {
                     hasDragged = true;
                 }
                 lastClientX = e.clientX;
@@ -6876,9 +6870,11 @@ class SkillTreeUI {
             const mouseY = clientY - rect.top - this.panY;
             
             let clickedNode = null;
+            let minDist = 9999;
             for (const id in this.game.skillTree.nodes) {
                 const n = this.game.skillTree.nodes[id];
                 const dist = Math.hypot(mouseX - n.x, mouseY - n.y);
+                if (dist < minDist) minDist = dist;
                 if (dist < 20) {
                     clickedNode = id;
                     break;
@@ -6896,11 +6892,12 @@ class SkillTreeUI {
 
         const stopDrag = (e) => {
             this.isDragging = false;
+            
             if (e.pointerId) {
                 this.canvas.releasePointerCapture(e.pointerId);
             }
             if (!hasDragged) {
-                handleNodeClick(e.clientX, e.clientY);
+                handleNodeClick(lastClientX, lastClientY); // Use lastClientX instead of e.clientX
             }
         };
 

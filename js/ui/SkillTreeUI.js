@@ -37,6 +37,9 @@ export class SkillTreeUI {
         let lastClientY = 0;
         let hasDragged = false;
 
+        let startTouchX = 0;
+        let startTouchY = 0;
+
         const getClientPos = (e) => {
             if (e.changedTouches && e.changedTouches.length > 0) {
                 return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
@@ -51,6 +54,8 @@ export class SkillTreeUI {
             this.isDragging = true;
             hasDragged = false;
             const pos = getClientPos(e);
+            startTouchX = pos.x;
+            startTouchY = pos.y;
             lastClientX = pos.x;
             lastClientY = pos.y;
             this.dragStartX = pos.x - this.panX;
@@ -60,7 +65,7 @@ export class SkillTreeUI {
         const doDrag = (e) => {
             if (this.isDragging) {
                 const pos = getClientPos(e);
-                if (Math.hypot(pos.x - lastClientX, pos.y - lastClientY) > 5) {
+                if (Math.hypot(pos.x - startTouchX, pos.y - startTouchY) > 15) {
                     hasDragged = true;
                 }
                 lastClientX = pos.x;

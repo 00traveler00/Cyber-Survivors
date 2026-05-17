@@ -124,6 +124,22 @@
         </div>
     </div>
     <script src="js/bundle.js"></script>
+    <script>
+        // Mobile error display - remove after debugging
+        window.onerror = function(msg, src, line, col, err) {
+            var div = document.createElement('div');
+            div.style.cssText = 'position:fixed;top:0;left:0;width:100%;padding:10px;background:#f00;color:#fff;font-size:14px;z-index:99999;word-break:break-all;';
+            div.textContent = 'ERR: ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']';
+            document.body.appendChild(div);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            var div = document.createElement('div');
+            div.style.cssText = 'position:fixed;top:40px;left:0;width:100%;padding:10px;background:#c00;color:#fff;font-size:14px;z-index:99999;word-break:break-all;';
+            div.textContent = 'Promise ERR: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason));
+            document.body.appendChild(div);
+        });
+    </script>
 </body>
 
 </html>

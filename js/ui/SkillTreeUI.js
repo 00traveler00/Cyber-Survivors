@@ -40,49 +40,43 @@ export class SkillTreeUI {
         let startTouchX = 0;
         let startTouchY = 0;
 
-        const getClientPos = (e) => {
-            if (e.changedTouches && e.changedTouches.length > 0) {
-                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-            }
-            if (e.touches && e.touches.length > 0) {
-                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            }
-            return { x: e.clientX, y: e.clientY };
-        };
+        let lastClientX = 0;
+        let lastClientY = 0;
+        let hasDragged = false;
+        let startTouchX = 0;
+        let startTouchY = 0;
 
         const startDrag = (e) => {
             this.isDragging = true;
             hasDragged = false;
-            const pos = getClientPos(e);
-            startTouchX = pos.x;
-            startTouchY = pos.y;
-            lastClientX = pos.x;
-            lastClientY = pos.y;
-            this.dragStartX = pos.x - this.panX;
-            this.dragStartY = pos.y - this.panY;
+            startTouchX = e.clientX;
+            startTouchY = e.clientY;
+            lastClientX = e.clientX;
+            lastClientY = e.clientY;
+            this.dragStartX = e.clientX - this.panX;
+            this.dragStartY = e.clientY - this.panY;
+            
+            if (e.pointerId) {
+                this.canvas.setPointerCapture(e.pointerId);
+            }
         };
 
         const doDrag = (e) => {
             if (this.isDragging) {
-                const pos = getClientPos(e);
-                if (Math.hypot(pos.x - startTouchX, pos.y - startTouchY) > 15) {
+                if (Math.hypot(e.clientX - startTouchX, e.clientY - startTouchY) > 10) {
                     hasDragged = true;
                 }
-                lastClientX = pos.x;
-                lastClientY = pos.y;
-                this.panX = pos.x - this.dragStartX;
-                this.panY = pos.y - this.dragStartY;
+                lastClientX = e.clientX;
+                lastClientY = e.clientY;
+                this.panX = e.clientX - this.dragStartX;
+                this.panY = e.clientY - this.dragStartY;
             }
         };
 
-        // Click to select node
-        const handleClick = (e) => {
-            if (hasDragged) return; // Ignore clicks if dragged
-
+        const handleNodeClick = (clientX, clientY) => {
             const rect = this.canvas.getBoundingClientRect();
-            const pos = getClientPos(e);
-            const mouseX = pos.x - rect.left - this.panX;
-            const mouseY = pos.y - rect.top - this.panY;
+            const mouseX = clientX - rect.left - this.panX;
+            const mouseY = clientY - rect.top - this.panY;
             
             let clickedNode = null;
             for (const id in this.game.skillTree.nodes) {
@@ -105,29 +99,17 @@ export class SkillTreeUI {
 
         const stopDrag = (e) => {
             this.isDragging = false;
-            if (!hasDragged && e && e.type === 'touchend') {
-                // Simulate click for touch devices
-                handleClick({ clientX: lastClientX, clientY: lastClientY });
+            if (e.pointerId) {
+                this.canvas.releasePointerCapture(e.pointerId);
+            }
+            if (!hasDragged) {
+                handleNodeClick(e.clientX, e.clientY);
             }
         };
 
-        this.canvas.addEventListener('mousedown', startDrag);
-        this.canvas.addEventListener('mousemove', doDrag);
-        this.canvas.addEventListener('mouseup', stopDrag);
-        this.canvas.addEventListener('mouseleave', stopDrag);
-        
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) startDrag(e);
-        }, {passive: true});
-        this.canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) {
-                e.preventDefault();
-                doDrag(e);
-            }
-        }, {passive: false});
-        this.canvas.addEventListener('touchend', stopDrag);
-
-        this.canvas.addEventListener('click', handleClick);
+        this.canvas.addEventListener('pointerdown', startDrag);
+        this.canvas.addEventListener('pointermove', doDrag);
+        this.canvas.addEventListener('pointerup', stopDrag);
 
         window.addEventListener('resize', () => {
             if (this.canvas) {

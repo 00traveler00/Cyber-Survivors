@@ -4934,7 +4934,7 @@ class UIManager {
         this.screens.title = this.createScreen('title-screen', `
             <h1 class="title-text">Cyber<br>Survivor</h1>
             <button id="btn-start" class="cyber-btn">START</button>
-            <button id="btn-options" class="cyber-btn secondary">OPTIONS</button>
+            <button id="btn-options" class="cyber-btn secondary" style="display:none;">OPTIONS</button>
             <button id="btn-reset" class="cyber-btn secondary" style="margin-top: 20px; background: #ff4444;">RESET DATA</button>
         `);
 

@@ -125,14 +125,14 @@
     </div>
     <script>
         // Mobile error display - MUST be before bundle.js
-        window.onerror = function(msg, src, line, col, err) {
+        window.onerror = function (msg, src, line, col, err) {
             var div = document.createElement('div');
             div.style.cssText = 'position:fixed;top:0;left:0;width:100%;padding:10px;background:#f00;color:#fff;font-size:14px;z-index:99999;word-break:break-all;font-family:monospace;';
-            div.textContent = 'ERR: ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']';
+            div.textContent = 'ERR: ' + msg + ' [' + (src || '').split('/').pop() + ':' + line + ']';
             document.body.appendChild(div);
             return false;
         };
-        window.addEventListener('unhandledrejection', function(e) {
+        window.addEventListener('unhandledrejection', function (e) {
             var div = document.createElement('div');
             div.style.cssText = 'position:fixed;top:50px;left:0;width:100%;padding:10px;background:#c00;color:#fff;font-size:14px;z-index:99999;word-break:break-all;font-family:monospace;';
             div.textContent = 'Promise ERR: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason));
@@ -142,11 +142,11 @@
     <script src="js/bundle.js"></script>
     <script>
         // Check if UI rendered correctly
-        setTimeout(function() {
+        setTimeout(function () {
             var screens = document.querySelectorAll('.ui-screen:not(.hidden)');
             var info = document.createElement('div');
             info.style.cssText = 'position:fixed;bottom:0;left:0;width:100%;padding:5px;background:rgba(0,0,100,0.8);color:#fff;font-size:11px;z-index:99999;font-family:monospace;';
-            info.textContent = 'Screens visible: ' + screens.length + ' | ' + Array.from(screens).map(s=>s.id).join(',');
+            info.textContent = 'Screens visible: ' + screens.length + ' | ' + Array.from(screens).map(s => s.id).join(',');
             document.body.appendChild(info);
         }, 1000);
     </script>

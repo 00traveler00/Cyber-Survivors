@@ -25,7 +25,12 @@ export class InputHandler {
         if (e.target.closest('.victory-container') ||
             e.target.closest('.gameover-container') ||
             e.target.closest('.options-container') ||
-            e.target.closest('.scrollable')) {
+            e.target.closest('.scrollable') ||
+            e.target.closest('.ui-screen') ||
+            e.target.tagName === 'BUTTON' ||
+            e.target.tagName === 'SELECT' ||
+            e.target.tagName === 'INPUT' ||
+            e.target.tagName === 'LABEL') {
             return;
         }
 
@@ -43,7 +48,12 @@ export class InputHandler {
         if (e.target.closest('.victory-container') ||
             e.target.closest('.gameover-container') ||
             e.target.closest('.options-container') ||
-            e.target.closest('.scrollable')) {
+            e.target.closest('.scrollable') ||
+            e.target.closest('.ui-screen') ||
+            e.target.tagName === 'BUTTON' ||
+            e.target.tagName === 'SELECT' ||
+            e.target.tagName === 'INPUT' ||
+            e.target.tagName === 'LABEL') {
             return;
         }
 
@@ -59,11 +69,15 @@ export class InputHandler {
         if (e.target.closest('.victory-container') ||
             e.target.closest('.gameover-container') ||
             e.target.closest('.options-container') ||
-            e.target.closest('.scrollable')) {
+            e.target.closest('.scrollable') ||
+            e.target.closest('.ui-screen') ||
+            e.target.tagName === 'BUTTON' ||
+            e.target.tagName === 'SELECT' ||
+            e.target.tagName === 'INPUT' ||
+            e.target.tagName === 'LABEL') {
             return;
         }
 
-        e.preventDefault();
         this.touchActive = false;
         this.joystickVector = { x: 0, y: 0 };
     }

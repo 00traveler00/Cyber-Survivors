@@ -1,32 +1,6 @@
 import os
 import re
 
-# Error Handler Script
-error_handler = """
-window.onerror = function(msg, url, line, col, error) {
-    const div = document.createElement('div');
-    div.style.position = 'fixed';
-    div.style.top = '0';
-    div.style.left = '0';
-    div.style.width = '100%';
-    div.style.background = 'rgba(255, 0, 0, 0.8)';
-    div.style.color = 'white';
-    div.style.padding = '10px';
-    div.style.zIndex = '9999';
-    div.style.fontSize = '12px';
-    div.style.wordBreak = 'break-all';
-    div.innerText = 'Error: ' + msg + '\\n' + url + ':' + line + ':' + col;
-    document.body.appendChild(div);
-    return false;
-};
-console.log = (function(oldLog) {
-    return function(...args) {
-        oldLog(...args);
-        // Optional: display logs on screen if needed
-    };
-})(console.log);
-"""
-
 files = [
     'js/game/InputHandler.js',
     'js/game/audio/AudioManager.js',
@@ -56,7 +30,7 @@ files = [
     'js/game/main.js'
 ]
 
-bundle_content = error_handler + '\n\n'
+bundle_content = '// Cyber Survivors Bundle\n\n'
 
 for file_path in files:
     if os.path.exists(file_path):

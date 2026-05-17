@@ -1,27 +1,4 @@
-
-window.onerror = function(msg, url, line, col, error) {
-    const div = document.createElement('div');
-    div.style.position = 'fixed';
-    div.style.top = '0';
-    div.style.left = '0';
-    div.style.width = '100%';
-    div.style.background = 'rgba(255, 0, 0, 0.8)';
-    div.style.color = 'white';
-    div.style.padding = '10px';
-    div.style.zIndex = '9999';
-    div.style.fontSize = '12px';
-    div.style.wordBreak = 'break-all';
-    div.innerText = 'Error: ' + msg + '\n' + url + ':' + line + ':' + col;
-    document.body.appendChild(div);
-    return false;
-};
-console.log = (function(oldLog) {
-    return function(...args) {
-        oldLog(...args);
-        // Optional: display logs on screen if needed
-    };
-})(console.log);
-
+// Cyber Survivors Bundle
 
 // --- js/game/InputHandler.js ---
 class InputHandler {

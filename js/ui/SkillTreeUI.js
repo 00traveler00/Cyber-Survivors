@@ -33,7 +33,14 @@ export class SkillTreeUI {
 
     bindEvents() {
         // Drag to pan
+        let lastClientX = 0;
+        let lastClientY = 0;
+        let hasDragged = false;
+
         const getClientPos = (e) => {
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+            }
             if (e.touches && e.touches.length > 0) {
                 return { x: e.touches[0].clientX, y: e.touches[0].clientY };
             }
@@ -42,7 +49,10 @@ export class SkillTreeUI {
 
         const startDrag = (e) => {
             this.isDragging = true;
+            hasDragged = false;
             const pos = getClientPos(e);
+            lastClientX = pos.x;
+            lastClientY = pos.y;
             this.dragStartX = pos.x - this.panX;
             this.dragStartY = pos.y - this.panY;
         };
@@ -50,33 +60,20 @@ export class SkillTreeUI {
         const doDrag = (e) => {
             if (this.isDragging) {
                 const pos = getClientPos(e);
+                if (Math.hypot(pos.x - lastClientX, pos.y - lastClientY) > 5) {
+                    hasDragged = true;
+                }
+                lastClientX = pos.x;
+                lastClientY = pos.y;
                 this.panX = pos.x - this.dragStartX;
                 this.panY = pos.y - this.dragStartY;
             }
         };
 
-        const stopDrag = () => {
-            this.isDragging = false;
-        };
-
-        this.canvas.addEventListener('mousedown', startDrag);
-        this.canvas.addEventListener('mousemove', doDrag);
-        this.canvas.addEventListener('mouseup', stopDrag);
-        this.canvas.addEventListener('mouseleave', stopDrag);
-        
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) startDrag(e);
-        }, {passive: true});
-        this.canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) {
-                e.preventDefault();
-                doDrag(e);
-            }
-        }, {passive: false});
-        this.canvas.addEventListener('touchend', stopDrag);
-
         // Click to select node
         const handleClick = (e) => {
+            if (hasDragged) return; // Ignore clicks if dragged
+
             const rect = this.canvas.getBoundingClientRect();
             const pos = getClientPos(e);
             const mouseX = pos.x - rect.left - this.panX;
@@ -96,11 +93,34 @@ export class SkillTreeUI {
                 this.selectedNodeId = clickedNode;
                 this.updateDetailPanel();
             } else {
-                // Ignore clicks if they were dragged significantly
                 this.selectedNodeId = null;
                 this.hideDetailPanel();
             }
         };
+
+        const stopDrag = (e) => {
+            this.isDragging = false;
+            if (!hasDragged && e && e.type === 'touchend') {
+                // Simulate click for touch devices
+                handleClick({ clientX: lastClientX, clientY: lastClientY });
+            }
+        };
+
+        this.canvas.addEventListener('mousedown', startDrag);
+        this.canvas.addEventListener('mousemove', doDrag);
+        this.canvas.addEventListener('mouseup', stopDrag);
+        this.canvas.addEventListener('mouseleave', stopDrag);
+        
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) startDrag(e);
+        }, {passive: true});
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                e.preventDefault();
+                doDrag(e);
+            }
+        }, {passive: false});
+        this.canvas.addEventListener('touchend', stopDrag);
 
         this.canvas.addEventListener('click', handleClick);
 

@@ -29,9 +29,44 @@ export class Enemy {
             }
         }
 
-        // Move towards player (default behavior)
-        const dx = this.game.player.x - this.x;
-        const dy = this.game.player.y - this.y;
+        // Apply smooth knockback friction slide
+        if (this.knockbackX || this.knockbackY) {
+            this.knockbackX = this.knockbackX || 0;
+            this.knockbackY = this.knockbackY || 0;
+            this.x += this.knockbackX * dt;
+            this.y += this.knockbackY * dt;
+            
+            // Friction decay
+            this.knockbackX *= Math.exp(-8 * dt);
+            this.knockbackY *= Math.exp(-8 * dt);
+            
+            if (Math.abs(this.knockbackX) < 1) this.knockbackX = 0;
+            if (Math.abs(this.knockbackY) < 1) this.knockbackY = 0;
+        }
+
+        // Move towards player or active decoy
+        let targetX = this.game.player.x;
+        let targetY = this.game.player.y;
+        if (this.game.player.decoys && this.game.player.decoys.length > 0) {
+            let nearestDecoy = null;
+            let nearestDist = Infinity;
+            this.game.player.decoys.forEach(decoy => {
+                const dx = decoy.x - this.x;
+                const dy = decoy.y - this.y;
+                const distSq = dx*dx + dy*dy;
+                if (distSq < nearestDist) {
+                    nearestDist = distSq;
+                    nearestDecoy = decoy;
+                }
+            });
+            if (nearestDecoy) {
+                targetX = nearestDecoy.x;
+                targetY = nearestDecoy.y;
+            }
+        }
+
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 0) {
@@ -42,6 +77,34 @@ export class Enemy {
 
     takeDamage(amount) {
         this.hp -= amount;
+
+        // Vampire Protocol: 1% chance to heal on hit (Max 50/s) for ALL attacks
+        if (this.game && this.game.player && this.game.player.lifeStealChance) {
+            const player = this.game.player;
+            const now = this.game.time; // Current game time in seconds
+            
+            if (!player.vampireProtocolLastSecondTime) {
+                player.vampireProtocolLastSecondTime = now;
+                player.vampireProtocolHealsThisSecond = 0;
+            }
+            
+            // Reset heal counter every 1.0 seconds
+            if (now - player.vampireProtocolLastSecondTime >= 1.0) {
+                player.vampireProtocolHealsThisSecond = 0;
+                player.vampireProtocolLastSecondTime = now;
+            }
+
+            if (player.hp < player.maxHp && player.vampireProtocolHealsThisSecond < 50) {
+                const roll = Math.random();
+                if (roll < player.lifeStealChance) {
+                    const healAmount = 1;
+                    player.hp = Math.min(player.maxHp, player.hp + healAmount);
+                    this.game.showDamage(player.x, player.y - 30, '+' + healAmount, '#00ff00');
+                    player.vampireProtocolHealsThisSecond++;
+                }
+            }
+        }
+
         return true;
     }
 
@@ -202,7 +265,7 @@ export class Lizard extends Enemy {
         this.color = '#aa00ff'; // Neon Purple
 
         this.shootTimer = 0;
-        this.shootInterval = 2.0;
+        this.shootInterval = 5.0;
     }
 
     update(dt) {
@@ -470,7 +533,7 @@ export class MissileEnemy extends Enemy {
         this.radius = 20;
 
         this.shootTimer = 0;
-        this.shootInterval = 3.0;
+        this.shootInterval = 10.0;
     }
 
     update(dt) {

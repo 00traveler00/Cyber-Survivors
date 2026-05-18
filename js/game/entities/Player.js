@@ -1,6 +1,8 @@
 import { Projectile } from './Projectile.js';
 import { Missile } from './Missile.js';
 import { PiercingProjectile } from './PiercingProjectile.js';
+import { Particle } from './Particle.js';
+import { Drone } from './Drone.js';
 
 export class Player {
     constructor(game, x, y) {
@@ -18,6 +20,27 @@ export class Player {
         // Relic Stats
         this.missileCount = 0; // Number of missile launchers acquired
         this.missileTimer = 0;
+        
+        // New Weapon Counts (stacks with each pickup, like missileCount)
+        this.satelliteBeamCount = 0;
+        this.singularityCount = 0;
+        this.cyberMineCount = 0;
+        this.railgunCount = 0;
+        this.boomerangCount = 0;
+        this.cyberFangsCount = 0;
+        this.hasCyberShotgun = false; // Reserved for future
+
+        // New Weapon Timers
+        this.satelliteBeamTimer = 0;
+        this.singularityTimer = 0;
+        this.mineTimer = 0;
+        this.railgunTimer = 0;
+        this.boomerangTimer = 0;
+        this.fangsTimer = 0;
+        this.singularities = [];
+        this.mines = [];
+        this.boomerangs = [];
+        this.beams = []; // Visual laser effects
         this.missileQueue = 0; // Number of missiles waiting to fire
         this.missileBurstTimer = 0; // Timer for burst firing
     }
@@ -67,6 +90,15 @@ export class Player {
 
     update(dt) {
         this.time += dt;
+        const sizeScale = this.projectileSize || 1;
+
+        // Update Holo Decoys
+        if (this.decoys) {
+            this.decoys.forEach(decoy => {
+                decoy.lifeTime -= dt;
+            });
+            this.decoys = this.decoys.filter(decoy => decoy.lifeTime > 0);
+        }
         
         // Orange Item: Adrenaline (Calculate effective stats)
         let effectiveSpeed = this.speed;
@@ -96,9 +128,9 @@ export class Player {
             // Frost Aura visual (Blue snowflakes)
             if (this.hasFrostAura && Math.random() < 0.1) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * 200;
+                const dist = Math.random() * 200 * sizeScale;
                 const p = new Particle(this.game, this.x + Math.cos(angle)*dist, this.y + Math.sin(angle)*dist, '#00ccff');
-                p.size = 3;
+                p.size = 3 * sizeScale;
                 p.vx = 0; p.vy = -10; // Float up
                 p.life = 1.0;
                 this.game.particles.push(p);
@@ -121,7 +153,7 @@ export class Player {
                 const edist = Math.sqrt(edx*edx + edy*edy);
                 
                 // Frost Aura (Slow)
-                if (this.hasFrostAura && edist < 200) {
+                if (this.hasFrostAura && edist < 200 * sizeScale) {
                     if (!enemy.frostAuraTimer) {
                         enemy.originalSpeed = enemy.originalSpeed || enemy.speed; // Store original speed once
                         enemy.speed = enemy.originalSpeed * 0.5; // Half speed
@@ -130,10 +162,14 @@ export class Player {
                 }
 
                 // Vampiric Aura (Damage and Drain)
-                if (this.hasVampiricAura && edist < 150 && vampiricTick) {
-                    enemy.takeDamage(2);
-                    this.game.showDamage(enemy.x, enemy.y, "2", '#990033');
-                    this.hp = Math.min(this.maxHp, this.hp + 0.1); // Small heal
+                if (this.hasVampiricAura && edist < 150 * sizeScale && vampiricTick) {
+                    enemy.takeDamage(8);
+                    this.game.showDamage(enemy.x, enemy.y, "8", '#990033');
+                    
+                    // Accumulate healing (0.5 HP per tick per enemy)
+                    if (this.hp < this.maxHp) {
+                        this.vampiricHealAccumulator = (this.vampiricHealAccumulator || 0) + 0.5;
+                    }
                     
                     // Flashy Drain Effect
                     const p = new Particle(this.game, enemy.x, enemy.y, '#990033');
@@ -147,6 +183,14 @@ export class Player {
                     }
                 }
             });
+
+            // Process accumulated Vampiric Aura healing with green floating text on Player
+            if (this.hasVampiricAura && this.vampiricHealAccumulator && this.vampiricHealAccumulator >= 1.0) {
+                const healAmount = Math.floor(this.vampiricHealAccumulator);
+                this.hp = Math.min(this.maxHp, this.hp + healAmount);
+                this.game.showDamage(this.x, this.y - 30, `+${healAmount}`, '#00ff00');
+                this.vampiricHealAccumulator -= healAmount;
+            }
         }
 
         // Boundary checks (World Bounds)
@@ -202,7 +246,7 @@ export class Player {
         
         // Orange Item: Orbital Blades update
         if (this.orbitalBlades && this.orbitalBlades.length > 0) {
-            const bladeRadius = 60; // Distance from player
+            const bladeRadius = 60 * sizeScale; // Distance from player
             const rotationSpeed = 3; // Radians per second
             
             this.orbitalBlades.forEach(blade => {
@@ -215,7 +259,7 @@ export class Player {
                     this.game.waveManager.enemies.forEach(enemy => {
                         const edx = enemy.x - bx;
                         const edy = enemy.y - by;
-                        if (edx*edx + edy*edy < (enemy.radius + 15)*(enemy.radius + 15)) { // 15 is blade radius
+                        if (edx*edx + edy*edy < (enemy.radius + 15 * sizeScale)*(enemy.radius + 15 * sizeScale)) { // 15 is blade radius
                             if (!enemy.bladeHitTimer) enemy.bladeHitTimer = 0;
                             if (this.time - enemy.bladeHitTimer > 0.2) { // 0.2s cooldown per enemy
                                 enemy.takeDamage(this.damage * 0.5); // 50% player damage
@@ -230,6 +274,306 @@ export class Player {
                     });
                 }
             });
+        }
+        // New Weapons Logic
+        
+        // 1. Satellite Beam (全ビームを発射し、敵が複数なら分散・1体なら集中)
+        if (this.satelliteBeamCount > 0) {
+            this.satelliteBeamTimer += dt;
+            if (this.satelliteBeamTimer >= effectiveShootInterval * 5.0) {
+                const availableTargets = this.findNearestEnemies(
+                    Math.min(this.satelliteBeamCount, this.game.waveManager.enemies.length)
+                );
+                if (availableTargets.length > 0) {
+                    this.satelliteBeamTimer = 0;
+                    // Build beam list: distribute across available enemies (cycle if fewer than beams)
+                    const beamTargets = Array.from({ length: this.satelliteBeamCount },
+                        (_, i) => availableTargets[i % availableTargets.length]
+                    );
+                    beamTargets.forEach(target => {
+                        this.game.waveManager.enemies.forEach(enemy => {
+                            const dx = enemy.x - target.x;
+                            const dy = enemy.y - target.y;
+                            const satelliteRadius = 100 * sizeScale;
+                            if (dx*dx + dy*dy < satelliteRadius*satelliteRadius) {
+                                enemy.takeDamage(this.damage * 4.0);
+                                this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 4.0), '#ff00ff');
+                                if (enemy.hp <= 0) {
+                                    this.game.processEnemyDeath(enemy);
+                                }
+                            }
+                        });
+                        this.beams.push({
+                            type: 'satellite',
+                            x1: target.x, y1: target.y - 1000,
+                            x2: target.x, y2: target.y,
+                            color: '#ff00ff', width: 30 * sizeScale, life: 0.5, maxLife: 0.5
+                        });
+                        for (let i = 0; i < 20; i++) {
+                            const p = new Particle(this.game, target.x + (Math.random()-0.5)*50*sizeScale, target.y + (Math.random()-0.5)*50*sizeScale, '#ff00ff');
+                            p.size = (2 + Math.random()*2) * sizeScale;
+                            this.game.particles.push(p);
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 2. Railgun (fires railgunCount beams in fan pattern, each beam damages independently)
+        if (this.railgunCount > 0) {
+            this.railgunTimer += dt;
+            if (this.railgunTimer >= effectiveShootInterval * 5.0) {
+                const target = this.findNearestEnemy();
+                if (target) {
+                    this.railgunTimer = 0;
+                    const baseAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                    const spreadAngle = 0.18;
+                    const halfSpread = (this.railgunCount - 1) / 2;
+
+                    for (let b = 0; b < this.railgunCount; b++) {
+                        const angle = baseAngle + (b - halfSpread) * spreadAngle;
+                        const ndx = Math.cos(angle);
+                        const ndy = Math.sin(angle);
+                        const maxDist = 1500;
+
+                        // Reset per-beam: each beam independently damages enemies
+                        this.game.waveManager.enemies.forEach(enemy => enemy.railgunHit = false);
+
+                        for (let d = 0; d < maxDist; d += 10) {
+                            const px = this.x + ndx * d;
+                            const py = this.y + ndy * d;
+                            this.game.waveManager.enemies.forEach(enemy => {
+                                const edx = enemy.x - px;
+                                const edy = enemy.y - py;
+                                const beamRadius = 15 * sizeScale;
+                                if (edx*edx + edy*edy < (enemy.radius + beamRadius)*(enemy.radius + beamRadius)) {
+                                    if (!enemy.railgunHit) {
+                                        enemy.takeDamage(this.damage * 5.0);
+                                        this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 5.0), '#00ffff');
+                                        enemy.railgunHit = true;
+                                        if (enemy.hp <= 0) {
+                                            this.game.processEnemyDeath(enemy);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        this.beams.push({
+                            type: 'railgun',
+                            x1: this.x, y1: this.y,
+                            x2: this.x + ndx * maxDist,
+                            y2: this.y + ndy * maxDist,
+                            color: '#00ffff', width: 15 * sizeScale, life: 0.3, maxLife: 0.3
+                        });
+                    }
+                    // Final cleanup
+                    this.game.waveManager.enemies.forEach(enemy => enemy.railgunHit = false);
+                }
+            }
+        }
+        
+        // 3. Cyber Fangs (hits cyberFangsCount * 3 enemies with spike visual)
+        if (this.cyberFangsCount > 0) {
+            this.fangsTimer += dt;
+            if (this.fangsTimer >= effectiveShootInterval * 2.0) {
+                this.fangsTimer = 0;
+                const enemies = this.game.waveManager.enemies;
+                if (enemies.length > 0) {
+                    const count = Math.min(this.cyberFangsCount * 3, enemies.length);
+                    const shuffled = [...enemies].sort(() => 0.5 - Math.random());
+                    for (let i = 0; i < count; i++) {
+                        const target = shuffled[i];
+                        target.takeDamage(this.damage * 1.5);
+                        this.game.showDamage(target.x, target.y, Math.round(this.damage * 1.5), '#ff0055');
+                        if (target.hp <= 0) {
+                            this.game.processEnemyDeath(target);
+                        }
+                        // Spike beam: rise from below
+                        this.beams.push({
+                            type: 'fang',
+                            x1: target.x, y1: target.y + 80 * sizeScale,
+                            x2: target.x, y2: target.y - 30 * sizeScale,
+                            color: '#ff0055', width: 10 * sizeScale, life: 0.35, maxLife: 0.35
+                        });
+                        // Burst particles (outward explosion)
+                        for (let j = 0; j < 14; j++) {
+                            const angle = (j / 14) * Math.PI * 2;
+                            const p = new Particle(this.game, target.x, target.y, j % 2 === 0 ? '#ff0055' : '#ff88aa');
+                            p.vx = Math.cos(angle) * (80 + Math.random() * 60) * sizeScale;
+                            p.vy = Math.sin(angle) * (80 + Math.random() * 60) * sizeScale;
+                            p.life = 0.5;
+                            p.size = 4 * sizeScale;
+                            this.game.particles.push(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Singularity (spawns singularityCount black holes at once)
+        if (this.singularityCount > 0) {
+            this.singularityTimer += dt;
+            if (this.singularityTimer >= effectiveShootInterval * 5.0) {
+                this.singularityTimer = 0;
+                for (let i = 0; i < this.singularityCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 100 + Math.random() * 150;
+                    this.singularities.push({
+                        x: this.x + Math.cos(angle) * dist,
+                        y: this.y + Math.sin(angle) * dist,
+                        radius: 80 * sizeScale, life: 4.0, pullForce: 50
+                    });
+                }
+            }
+        }
+        
+        if (this.singularities) {
+            this.singularities = this.singularities.filter(s => s.life > 0);
+            this.singularities.forEach(s => {
+                s.life -= dt;
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = s.x - enemy.x;
+                    const dy = s.y - enemy.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < s.radius * 2) {
+                        const force = (1 - dist / (s.radius * 2)) * s.pullForce;
+                        enemy.x += (dx / dist) * force * dt;
+                        enemy.y += (dy / dist) * force * dt;
+                        
+                        if (dist < s.radius) {
+                            if (!enemy.singularityHitTimer) enemy.singularityHitTimer = 0;
+                            if (this.time - enemy.singularityHitTimer >= 0.2) {
+                                const dmg = this.damage * 1.5 * 0.2; // 3x damage over 0.2s tick (0.5 * 3 * 0.2)
+                                enemy.takeDamage(dmg);
+                                this.game.showDamage(enemy.x, enemy.y, Math.round(dmg), '#8844ff');
+                                enemy.singularityHitTimer = this.time;
+                                if (enemy.hp <= 0) {
+                                    this.game.processEnemyDeath(enemy);
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // 5. Cyber Mine (drops cyberMineCount mines at once)
+        if (this.cyberMineCount > 0) {
+            this.mineTimer += dt;
+            if (this.mineTimer >= effectiveShootInterval * 2.0) {
+                this.mineTimer = 0;
+                for (let i = 0; i < this.cyberMineCount; i++) {
+                    const angle = (i / this.cyberMineCount) * Math.PI * 2;
+                    const spread = this.cyberMineCount > 1 ? 25 * sizeScale : 0;
+                    this.mines.push({
+                        x: this.x + Math.cos(angle) * spread,
+                        y: this.y + Math.sin(angle) * spread,
+                        radius: 15 * sizeScale, exploded: false
+                    });
+                }
+            }
+        }
+        
+        if (this.mines) {
+            this.mines = this.mines.filter(m => !m.exploded);
+            this.mines.forEach(m => {
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = m.x - enemy.x;
+                    const dy = m.y - enemy.y;
+                    if (dx*dx + dy*dy < (m.radius + enemy.radius)*(m.radius + enemy.radius)) {
+                        m.exploded = true;
+                        this.game.waveManager.enemies.forEach(e => {
+                            const edx = e.x - m.x;
+                            const edy = e.y - m.y;
+                            const blastRad = 80 * sizeScale;
+                            if (edx*edx + edy*edy < blastRad*blastRad) {
+                                e.takeDamage(this.damage * 2);
+                                this.game.showDamage(e.x, e.y, Math.round(this.damage * 2), '#ffcc00');
+                                if (e.hp <= 0) {
+                                    this.game.processEnemyDeath(e);
+                                }
+                            }
+                        });
+                        for (let i = 0; i < 10; i++) {
+                            this.game.particles.push(new Particle(this.game, m.x, m.y, '#ffcc00'));
+                        }
+                    }
+                });
+            });
+        }
+
+        // 6. Boomerang Blade (throws boomerangCount blades in fan pattern, range x2)
+        if (this.boomerangCount > 0) {
+            this.boomerangTimer += dt;
+            if (this.boomerangTimer >= effectiveShootInterval) {
+                const target = this.findNearestEnemy();
+                if (target) {
+                    this.boomerangTimer = 0;
+                    const baseAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                    const spreadAngle = 0.3;
+                    const halfSpread = (this.boomerangCount - 1) / 2;
+                    for (let i = 0; i < this.boomerangCount; i++) {
+                        const angle = baseAngle + (i - halfSpread) * spreadAngle;
+                        this.boomerangs.push({
+                            x: this.x, y: this.y,
+                            startX: this.x, startY: this.y,
+                            angle: angle,
+                            distance: 0, maxDistance: 400,
+                            returning: false, radius: 15 * sizeScale, life: 4.0
+                        });
+                    }
+                }
+            }
+        }
+        
+        if (this.boomerangs) {
+            this.boomerangs = this.boomerangs.filter(b => b.life > 0);
+            this.boomerangs.forEach(b => {
+                b.life -= dt;
+                const speed = 300;
+                if (!b.returning) {
+                    b.distance += speed * dt;
+                    b.x = b.startX + Math.cos(b.angle) * b.distance;
+                    b.y = b.startY + Math.sin(b.angle) * b.distance;
+                    if (b.distance >= b.maxDistance) {
+                        b.returning = true;
+                    }
+                } else {
+                    const dx = this.x - b.x;
+                    const dy = this.y - b.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 20) {
+                        b.life = 0;
+                    } else {
+                        b.x += (dx / dist) * speed * dt;
+                        b.y += (dy / dist) * speed * dt;
+                    }
+                }
+                
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = b.x - enemy.x;
+                    const dy = b.y - enemy.y;
+                    if (dx*dx + dy*dy < (b.radius + enemy.radius)*(b.radius + enemy.radius)) {
+                        if (!enemy.boomerangHitTimer) enemy.boomerangHitTimer = 0;
+                        if (this.time - enemy.boomerangHitTimer > 0.3) {
+                            enemy.takeDamage(this.damage * 1.0);
+                            this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 1.0), '#ffffff');
+                            enemy.boomerangHitTimer = this.time;
+                            if (enemy.hp <= 0) {
+                                this.game.processEnemyDeath(enemy);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+
+        
+        // Update Beams
+        if (this.beams) {
+            this.beams = this.beams.filter(b => b.life > 0);
+            this.beams.forEach(b => b.life -= dt);
         }
     }
 
@@ -283,27 +627,66 @@ export class Player {
     findNearestEnemy() {
         let nearest = null;
         let minDist = Infinity;
-
-        // Safety check
-        if (!this.game.waveManager || !this.game.waveManager.enemies) {
-            return null;
-        }
-
+        if (!this.game.waveManager || !this.game.waveManager.enemies) return null;
         this.game.waveManager.enemies.forEach(enemy => {
             const dx = enemy.x - this.x;
             const dy = enemy.y - this.y;
             const dist = dx * dx + dy * dy;
-
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = enemy;
-            }
+            if (dist < minDist) { minDist = dist; nearest = enemy; }
         });
-
         return nearest;
     }
 
+    // Returns up to n nearest enemies (sorted by distance)
+    findNearestEnemies(n) {
+        if (!this.game.waveManager || !this.game.waveManager.enemies) return [];
+        return [...this.game.waveManager.enemies]
+            .map(e => ({ e, dist: (e.x-this.x)**2 + (e.y-this.y)**2 }))
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, n)
+            .map(item => item.e);
+    }
+
     draw(ctx) {
+        const sizeScale = this.projectileSize || 1;
+
+        // Draw Holo Decoys
+        if (this.decoys && this.decoys.length > 0) {
+            this.decoys.forEach(decoy => {
+                ctx.save();
+                ctx.translate(decoy.x, decoy.y);
+                
+                const r = this.radius;
+                
+                // Cyan Glow Aura
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = '#00ffff';
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Silhouette Body
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Digital Grid Lines
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(-r, 0);
+                ctx.lineTo(r, 0);
+                ctx.stroke();
+                
+                ctx.restore();
+            });
+        }
         // Draw Auras
         if (this.hasFrostAura) {
             ctx.save();
@@ -311,7 +694,7 @@ export class Player {
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 200, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 200 * sizeScale, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
@@ -322,16 +705,95 @@ export class Player {
             ctx.lineWidth = 2;
             ctx.setLineDash([10, 10]);
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 150, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 150 * sizeScale, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
+        }
+
+        if (this.singularities) {
+            this.singularities.forEach(s => {
+                ctx.save();
+                ctx.fillStyle = 'rgba(85, 0, 170, 0.4)';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Inner core
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        if (this.mines) {
+            this.mines.forEach(m => {
+                ctx.save();
+                ctx.fillStyle = '#ffcc00';
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // blinking center
+                if (Math.floor(this.time * 5) % 2 === 0) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, m.radius * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+        }
+
+        if (this.boomerangs) {
+            this.boomerangs.forEach(b => {
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.rotate(this.time * 10); // Spin fast
+                ctx.fillStyle = '#00ff55';
+                ctx.beginPath();
+                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Blade shape
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, -b.radius);
+                ctx.lineTo(b.radius, b.radius);
+                ctx.lineTo(-b.radius, b.radius);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            });
+        }
+
+        // Draw Beams
+        if (this.beams) {
+            this.beams.forEach(b => {
+                ctx.save();
+                ctx.strokeStyle = b.color;
+                ctx.lineWidth = b.width * (b.life / b.maxLife);
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+                
+                // Add white core
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = (b.width * 0.3) * (b.life / b.maxLife);
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+                
+                ctx.restore();
+            });
         }
 
         this.projectiles.forEach(p => p.draw(ctx));
         
         // Draw Orbital Blades
         if (this.orbitalBlades && this.orbitalBlades.length > 0) {
-            const bladeRadius = 60;
+            const bladeRadius = 60 * sizeScale;
             ctx.save();
             ctx.shadowBlur = 10;
             ctx.shadowColor = '#dddddd';
@@ -343,6 +805,7 @@ export class Player {
                 ctx.save();
                 ctx.translate(bx, by);
                 ctx.rotate(blade.angle + Math.PI/2);
+                ctx.scale(sizeScale, sizeScale);
                 ctx.beginPath();
                 ctx.moveTo(0, -10);
                 ctx.lineTo(5, 5);

@@ -32,12 +32,49 @@ export class Chest {
         const selected = [];
         
         // Filter by category if one is set and it's not 'random'
-        let available = [...this.game.ui.relics].filter(r => r.category !== 'none');
+        let available = [...this.game.ui.relics].filter(r => r.category !== 'none' && !r.disabled);
+
+        // Enforce the 5 attack method limit (including basic attack)
+        const ATTACK_RELIC_IDS = [
+            'pierce_shot',      // Plasma Orb
+            'multishot',        // Splitter Module
+            'drone',            // Support Drone
+            'missile',          // Missile Pod
+            'satellite_beam',
+            'singularity',
+            'cyber_mine',
+            'railgun',
+            'boomerang_blade',
+            'cyber_fangs'
+        ];
+
+        // Base attack is always present and counts as 1 attack method
+        const ownedAttacks = new Set();
+        ownedAttacks.add('base');
+
+        if (this.game.acquiredRelics) {
+            this.game.acquiredRelics.forEach(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    ownedAttacks.add(r.id);
+                }
+            });
+        }
+
+        // If player already has 5 or more attack types, exclude any other new yellow attacks
+        if (ownedAttacks.size >= 5) {
+            available = available.filter(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    return ownedAttacks.has(r.id);
+                }
+                return true;
+            });
+        }
+
         if (this.category !== 'random') {
             available = available.filter(r => r.category === this.category);
         }
 
-        // Select up to 3 items (or less if not enough in category)
+        // Select up to 3 items (or less if not enough in category/filtered list)
         for (let i = 0; i < 3 && available.length > 0; i++) {
             // Calculate the total weight of remaining items
             const totalWeight = available.reduce((sum, r) => sum + r.weight, 0);
@@ -53,7 +90,7 @@ export class Chest {
                 }
             }
 
-            // 選択したアイテムを追加し、リストから削除
+            // Add selected item and remove from temporary pool
             if (selectedRelic) {
                 selected.push(selectedRelic);
                 const index = available.findIndex(r => r.id === selectedRelic.id);

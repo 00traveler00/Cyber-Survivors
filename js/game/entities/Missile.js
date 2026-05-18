@@ -8,10 +8,10 @@ export class Missile extends Projectile {
 
         // Missile Stats
         this.speed = 450;
-        this.turnSpeed = 5.0; // Radians per second
+        this.turnSpeed = 10.0; // Radians per second (was 5.0)
         this.damage = game.player.damage * 2.0;
         this.color = '#ff0088';
-        this.radius = 8;
+        this.radius = 8 * (game.player.projectileSize || 1);
         this.lifeTime = 2.5;
 
         // Initial Launch: Randomize angle slightly for "spread" effect
@@ -116,6 +116,9 @@ export class Missile extends Projectile {
         ctx.globalAlpha = 0.6; // Semi-transparent
         ctx.translate(this.x, this.y);
         ctx.rotate(Math.atan2(this.vy, this.vx));
+        
+        const sizeScale = this.game.player.projectileSize || 1;
+        ctx.scale(sizeScale, sizeScale);
 
         // Missile Body
         ctx.fillStyle = this.color;

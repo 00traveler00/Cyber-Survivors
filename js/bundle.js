@@ -558,10 +558,10 @@ class Missile extends Projectile {
 
         // Missile Stats
         this.speed = 450;
-        this.turnSpeed = 5.0; // Radians per second
+        this.turnSpeed = 10.0; // Radians per second (was 5.0)
         this.damage = game.player.damage * 2.0;
         this.color = '#ff0088';
-        this.radius = 8;
+        this.radius = 8 * (game.player.projectileSize || 1);
         this.lifeTime = 2.5;
 
         // Initial Launch: Randomize angle slightly for "spread" effect
@@ -666,6 +666,9 @@ class Missile extends Projectile {
         ctx.globalAlpha = 0.6; // Semi-transparent
         ctx.translate(this.x, this.y);
         ctx.rotate(Math.atan2(this.vy, this.vx));
+        
+        const sizeScale = this.game.player.projectileSize || 1;
+        ctx.scale(sizeScale, sizeScale);
 
         // Missile Body
         ctx.fillStyle = this.color;
@@ -971,7 +974,7 @@ class EnemyMissile extends EnemyProjectile {
         this.speed = 162.5; // Increased by 30% from 125
         this.turnSpeed = 2.5;
         this.color = '#ff0000';
-        this.lifeTime = 20.0; // 5x duration
+        this.lifeTime = 5.0;
 
         // Initial random spread
         const angle = Math.atan2(this.vy, this.vx) + (Math.random() - 0.5) * 1.0;
@@ -1462,9 +1465,44 @@ class Enemy {
             }
         }
 
-        // Move towards player (default behavior)
-        const dx = this.game.player.x - this.x;
-        const dy = this.game.player.y - this.y;
+        // Apply smooth knockback friction slide
+        if (this.knockbackX || this.knockbackY) {
+            this.knockbackX = this.knockbackX || 0;
+            this.knockbackY = this.knockbackY || 0;
+            this.x += this.knockbackX * dt;
+            this.y += this.knockbackY * dt;
+            
+            // Friction decay
+            this.knockbackX *= Math.exp(-8 * dt);
+            this.knockbackY *= Math.exp(-8 * dt);
+            
+            if (Math.abs(this.knockbackX) < 1) this.knockbackX = 0;
+            if (Math.abs(this.knockbackY) < 1) this.knockbackY = 0;
+        }
+
+        // Move towards player or active decoy
+        let targetX = this.game.player.x;
+        let targetY = this.game.player.y;
+        if (this.game.player.decoys && this.game.player.decoys.length > 0) {
+            let nearestDecoy = null;
+            let nearestDist = Infinity;
+            this.game.player.decoys.forEach(decoy => {
+                const dx = decoy.x - this.x;
+                const dy = decoy.y - this.y;
+                const distSq = dx*dx + dy*dy;
+                if (distSq < nearestDist) {
+                    nearestDist = distSq;
+                    nearestDecoy = decoy;
+                }
+            });
+            if (nearestDecoy) {
+                targetX = nearestDecoy.x;
+                targetY = nearestDecoy.y;
+            }
+        }
+
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 0) {
@@ -1475,6 +1513,34 @@ class Enemy {
 
     takeDamage(amount) {
         this.hp -= amount;
+
+        // Vampire Protocol: 1% chance to heal on hit (Max 50/s) for ALL attacks
+        if (this.game && this.game.player && this.game.player.lifeStealChance) {
+            const player = this.game.player;
+            const now = this.game.time; // Current game time in seconds
+            
+            if (!player.vampireProtocolLastSecondTime) {
+                player.vampireProtocolLastSecondTime = now;
+                player.vampireProtocolHealsThisSecond = 0;
+            }
+            
+            // Reset heal counter every 1.0 seconds
+            if (now - player.vampireProtocolLastSecondTime >= 1.0) {
+                player.vampireProtocolHealsThisSecond = 0;
+                player.vampireProtocolLastSecondTime = now;
+            }
+
+            if (player.hp < player.maxHp && player.vampireProtocolHealsThisSecond < 50) {
+                const roll = Math.random();
+                if (roll < player.lifeStealChance) {
+                    const healAmount = 1;
+                    player.hp = Math.min(player.maxHp, player.hp + healAmount);
+                    this.game.showDamage(player.x, player.y - 30, '+' + healAmount, '#00ff00');
+                    player.vampireProtocolHealsThisSecond++;
+                }
+            }
+        }
+
         return true;
     }
 
@@ -1635,7 +1701,7 @@ class Lizard extends Enemy {
         this.color = '#aa00ff'; // Neon Purple
 
         this.shootTimer = 0;
-        this.shootInterval = 2.0;
+        this.shootInterval = 5.0;
     }
 
     update(dt) {
@@ -1903,7 +1969,7 @@ class MissileEnemy extends Enemy {
         this.radius = 20;
 
         this.shootTimer = 0;
-        this.shootInterval = 3.0;
+        this.shootInterval = 10.0;
     }
 
     update(dt) {
@@ -2095,12 +2161,49 @@ class Chest {
         const selected = [];
         
         // Filter by category if one is set and it's not 'random'
-        let available = [...this.game.ui.relics].filter(r => r.category !== 'none');
+        let available = [...this.game.ui.relics].filter(r => r.category !== 'none' && !r.disabled);
+
+        // Enforce the 5 attack method limit (including basic attack)
+        const ATTACK_RELIC_IDS = [
+            'pierce_shot',      // Plasma Orb
+            'multishot',        // Splitter Module
+            'drone',            // Support Drone
+            'missile',          // Missile Pod
+            'satellite_beam',
+            'singularity',
+            'cyber_mine',
+            'railgun',
+            'boomerang_blade',
+            'cyber_fangs'
+        ];
+
+        // Base attack is always present and counts as 1 attack method
+        const ownedAttacks = new Set();
+        ownedAttacks.add('base');
+
+        if (this.game.acquiredRelics) {
+            this.game.acquiredRelics.forEach(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    ownedAttacks.add(r.id);
+                }
+            });
+        }
+
+        // If player already has 5 or more attack types, exclude any other new yellow attacks
+        if (ownedAttacks.size >= 5) {
+            available = available.filter(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    return ownedAttacks.has(r.id);
+                }
+                return true;
+            });
+        }
+
         if (this.category !== 'random') {
             available = available.filter(r => r.category === this.category);
         }
 
-        // Select up to 3 items (or less if not enough in category)
+        // Select up to 3 items (or less if not enough in category/filtered list)
         for (let i = 0; i < 3 && available.length > 0; i++) {
             // Calculate the total weight of remaining items
             const totalWeight = available.reduce((sum, r) => sum + r.weight, 0);
@@ -2116,7 +2219,7 @@ class Chest {
                 }
             }
 
-            // 選択したアイテムを追加し、リストから削除
+            // Add selected item and remove from temporary pool
             if (selectedRelic) {
                 selected.push(selectedRelic);
                 const index = available.findIndex(r => r.id === selectedRelic.id);
@@ -3603,6 +3706,8 @@ class NextStageAltar {
 
 
 
+
+
 class Player {
     constructor(game, x, y) {
         this.game = game;
@@ -3619,6 +3724,27 @@ class Player {
         // Relic Stats
         this.missileCount = 0; // Number of missile launchers acquired
         this.missileTimer = 0;
+        
+        // New Weapon Counts (stacks with each pickup, like missileCount)
+        this.satelliteBeamCount = 0;
+        this.singularityCount = 0;
+        this.cyberMineCount = 0;
+        this.railgunCount = 0;
+        this.boomerangCount = 0;
+        this.cyberFangsCount = 0;
+        this.hasCyberShotgun = false; // Reserved for future
+
+        // New Weapon Timers
+        this.satelliteBeamTimer = 0;
+        this.singularityTimer = 0;
+        this.mineTimer = 0;
+        this.railgunTimer = 0;
+        this.boomerangTimer = 0;
+        this.fangsTimer = 0;
+        this.singularities = [];
+        this.mines = [];
+        this.boomerangs = [];
+        this.beams = []; // Visual laser effects
         this.missileQueue = 0; // Number of missiles waiting to fire
         this.missileBurstTimer = 0; // Timer for burst firing
     }
@@ -3668,6 +3794,15 @@ class Player {
 
     update(dt) {
         this.time += dt;
+        const sizeScale = this.projectileSize || 1;
+
+        // Update Holo Decoys
+        if (this.decoys) {
+            this.decoys.forEach(decoy => {
+                decoy.lifeTime -= dt;
+            });
+            this.decoys = this.decoys.filter(decoy => decoy.lifeTime > 0);
+        }
         
         // Orange Item: Adrenaline (Calculate effective stats)
         let effectiveSpeed = this.speed;
@@ -3697,9 +3832,9 @@ class Player {
             // Frost Aura visual (Blue snowflakes)
             if (this.hasFrostAura && Math.random() < 0.1) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * 200;
+                const dist = Math.random() * 200 * sizeScale;
                 const p = new Particle(this.game, this.x + Math.cos(angle)*dist, this.y + Math.sin(angle)*dist, '#00ccff');
-                p.size = 3;
+                p.size = 3 * sizeScale;
                 p.vx = 0; p.vy = -10; // Float up
                 p.life = 1.0;
                 this.game.particles.push(p);
@@ -3722,7 +3857,7 @@ class Player {
                 const edist = Math.sqrt(edx*edx + edy*edy);
                 
                 // Frost Aura (Slow)
-                if (this.hasFrostAura && edist < 200) {
+                if (this.hasFrostAura && edist < 200 * sizeScale) {
                     if (!enemy.frostAuraTimer) {
                         enemy.originalSpeed = enemy.originalSpeed || enemy.speed; // Store original speed once
                         enemy.speed = enemy.originalSpeed * 0.5; // Half speed
@@ -3731,10 +3866,14 @@ class Player {
                 }
 
                 // Vampiric Aura (Damage and Drain)
-                if (this.hasVampiricAura && edist < 150 && vampiricTick) {
-                    enemy.takeDamage(2);
-                    this.game.showDamage(enemy.x, enemy.y, "2", '#990033');
-                    this.hp = Math.min(this.maxHp, this.hp + 0.1); // Small heal
+                if (this.hasVampiricAura && edist < 150 * sizeScale && vampiricTick) {
+                    enemy.takeDamage(8);
+                    this.game.showDamage(enemy.x, enemy.y, "8", '#990033');
+                    
+                    // Accumulate healing (0.5 HP per tick per enemy)
+                    if (this.hp < this.maxHp) {
+                        this.vampiricHealAccumulator = (this.vampiricHealAccumulator || 0) + 0.5;
+                    }
                     
                     // Flashy Drain Effect
                     const p = new Particle(this.game, enemy.x, enemy.y, '#990033');
@@ -3748,6 +3887,14 @@ class Player {
                     }
                 }
             });
+
+            // Process accumulated Vampiric Aura healing with green floating text on Player
+            if (this.hasVampiricAura && this.vampiricHealAccumulator && this.vampiricHealAccumulator >= 1.0) {
+                const healAmount = Math.floor(this.vampiricHealAccumulator);
+                this.hp = Math.min(this.maxHp, this.hp + healAmount);
+                this.game.showDamage(this.x, this.y - 30, `+${healAmount}`, '#00ff00');
+                this.vampiricHealAccumulator -= healAmount;
+            }
         }
 
         // Boundary checks (World Bounds)
@@ -3803,7 +3950,7 @@ class Player {
         
         // Orange Item: Orbital Blades update
         if (this.orbitalBlades && this.orbitalBlades.length > 0) {
-            const bladeRadius = 60; // Distance from player
+            const bladeRadius = 60 * sizeScale; // Distance from player
             const rotationSpeed = 3; // Radians per second
             
             this.orbitalBlades.forEach(blade => {
@@ -3816,7 +3963,7 @@ class Player {
                     this.game.waveManager.enemies.forEach(enemy => {
                         const edx = enemy.x - bx;
                         const edy = enemy.y - by;
-                        if (edx*edx + edy*edy < (enemy.radius + 15)*(enemy.radius + 15)) { // 15 is blade radius
+                        if (edx*edx + edy*edy < (enemy.radius + 15 * sizeScale)*(enemy.radius + 15 * sizeScale)) { // 15 is blade radius
                             if (!enemy.bladeHitTimer) enemy.bladeHitTimer = 0;
                             if (this.time - enemy.bladeHitTimer > 0.2) { // 0.2s cooldown per enemy
                                 enemy.takeDamage(this.damage * 0.5); // 50% player damage
@@ -3831,6 +3978,306 @@ class Player {
                     });
                 }
             });
+        }
+        // New Weapons Logic
+        
+        // 1. Satellite Beam (全ビームを発射し、敵が複数なら分散・1体なら集中)
+        if (this.satelliteBeamCount > 0) {
+            this.satelliteBeamTimer += dt;
+            if (this.satelliteBeamTimer >= effectiveShootInterval * 5.0) {
+                const availableTargets = this.findNearestEnemies(
+                    Math.min(this.satelliteBeamCount, this.game.waveManager.enemies.length)
+                );
+                if (availableTargets.length > 0) {
+                    this.satelliteBeamTimer = 0;
+                    // Build beam list: distribute across available enemies (cycle if fewer than beams)
+                    const beamTargets = Array.from({ length: this.satelliteBeamCount },
+                        (_, i) => availableTargets[i % availableTargets.length]
+                    );
+                    beamTargets.forEach(target => {
+                        this.game.waveManager.enemies.forEach(enemy => {
+                            const dx = enemy.x - target.x;
+                            const dy = enemy.y - target.y;
+                            const satelliteRadius = 100 * sizeScale;
+                            if (dx*dx + dy*dy < satelliteRadius*satelliteRadius) {
+                                enemy.takeDamage(this.damage * 4.0);
+                                this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 4.0), '#ff00ff');
+                                if (enemy.hp <= 0) {
+                                    this.game.processEnemyDeath(enemy);
+                                }
+                            }
+                        });
+                        this.beams.push({
+                            type: 'satellite',
+                            x1: target.x, y1: target.y - 1000,
+                            x2: target.x, y2: target.y,
+                            color: '#ff00ff', width: 30 * sizeScale, life: 0.5, maxLife: 0.5
+                        });
+                        for (let i = 0; i < 20; i++) {
+                            const p = new Particle(this.game, target.x + (Math.random()-0.5)*50*sizeScale, target.y + (Math.random()-0.5)*50*sizeScale, '#ff00ff');
+                            p.size = (2 + Math.random()*2) * sizeScale;
+                            this.game.particles.push(p);
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 2. Railgun (fires railgunCount beams in fan pattern, each beam damages independently)
+        if (this.railgunCount > 0) {
+            this.railgunTimer += dt;
+            if (this.railgunTimer >= effectiveShootInterval * 5.0) {
+                const target = this.findNearestEnemy();
+                if (target) {
+                    this.railgunTimer = 0;
+                    const baseAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                    const spreadAngle = 0.18;
+                    const halfSpread = (this.railgunCount - 1) / 2;
+
+                    for (let b = 0; b < this.railgunCount; b++) {
+                        const angle = baseAngle + (b - halfSpread) * spreadAngle;
+                        const ndx = Math.cos(angle);
+                        const ndy = Math.sin(angle);
+                        const maxDist = 1500;
+
+                        // Reset per-beam: each beam independently damages enemies
+                        this.game.waveManager.enemies.forEach(enemy => enemy.railgunHit = false);
+
+                        for (let d = 0; d < maxDist; d += 10) {
+                            const px = this.x + ndx * d;
+                            const py = this.y + ndy * d;
+                            this.game.waveManager.enemies.forEach(enemy => {
+                                const edx = enemy.x - px;
+                                const edy = enemy.y - py;
+                                const beamRadius = 15 * sizeScale;
+                                if (edx*edx + edy*edy < (enemy.radius + beamRadius)*(enemy.radius + beamRadius)) {
+                                    if (!enemy.railgunHit) {
+                                        enemy.takeDamage(this.damage * 5.0);
+                                        this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 5.0), '#00ffff');
+                                        enemy.railgunHit = true;
+                                        if (enemy.hp <= 0) {
+                                            this.game.processEnemyDeath(enemy);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        this.beams.push({
+                            type: 'railgun',
+                            x1: this.x, y1: this.y,
+                            x2: this.x + ndx * maxDist,
+                            y2: this.y + ndy * maxDist,
+                            color: '#00ffff', width: 15 * sizeScale, life: 0.3, maxLife: 0.3
+                        });
+                    }
+                    // Final cleanup
+                    this.game.waveManager.enemies.forEach(enemy => enemy.railgunHit = false);
+                }
+            }
+        }
+        
+        // 3. Cyber Fangs (hits cyberFangsCount * 3 enemies with spike visual)
+        if (this.cyberFangsCount > 0) {
+            this.fangsTimer += dt;
+            if (this.fangsTimer >= effectiveShootInterval * 2.0) {
+                this.fangsTimer = 0;
+                const enemies = this.game.waveManager.enemies;
+                if (enemies.length > 0) {
+                    const count = Math.min(this.cyberFangsCount * 3, enemies.length);
+                    const shuffled = [...enemies].sort(() => 0.5 - Math.random());
+                    for (let i = 0; i < count; i++) {
+                        const target = shuffled[i];
+                        target.takeDamage(this.damage * 1.5);
+                        this.game.showDamage(target.x, target.y, Math.round(this.damage * 1.5), '#ff0055');
+                        if (target.hp <= 0) {
+                            this.game.processEnemyDeath(target);
+                        }
+                        // Spike beam: rise from below
+                        this.beams.push({
+                            type: 'fang',
+                            x1: target.x, y1: target.y + 80 * sizeScale,
+                            x2: target.x, y2: target.y - 30 * sizeScale,
+                            color: '#ff0055', width: 10 * sizeScale, life: 0.35, maxLife: 0.35
+                        });
+                        // Burst particles (outward explosion)
+                        for (let j = 0; j < 14; j++) {
+                            const angle = (j / 14) * Math.PI * 2;
+                            const p = new Particle(this.game, target.x, target.y, j % 2 === 0 ? '#ff0055' : '#ff88aa');
+                            p.vx = Math.cos(angle) * (80 + Math.random() * 60) * sizeScale;
+                            p.vy = Math.sin(angle) * (80 + Math.random() * 60) * sizeScale;
+                            p.life = 0.5;
+                            p.size = 4 * sizeScale;
+                            this.game.particles.push(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Singularity (spawns singularityCount black holes at once)
+        if (this.singularityCount > 0) {
+            this.singularityTimer += dt;
+            if (this.singularityTimer >= effectiveShootInterval * 5.0) {
+                this.singularityTimer = 0;
+                for (let i = 0; i < this.singularityCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 100 + Math.random() * 150;
+                    this.singularities.push({
+                        x: this.x + Math.cos(angle) * dist,
+                        y: this.y + Math.sin(angle) * dist,
+                        radius: 80 * sizeScale, life: 4.0, pullForce: 50
+                    });
+                }
+            }
+        }
+        
+        if (this.singularities) {
+            this.singularities = this.singularities.filter(s => s.life > 0);
+            this.singularities.forEach(s => {
+                s.life -= dt;
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = s.x - enemy.x;
+                    const dy = s.y - enemy.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < s.radius * 2) {
+                        const force = (1 - dist / (s.radius * 2)) * s.pullForce;
+                        enemy.x += (dx / dist) * force * dt;
+                        enemy.y += (dy / dist) * force * dt;
+                        
+                        if (dist < s.radius) {
+                            if (!enemy.singularityHitTimer) enemy.singularityHitTimer = 0;
+                            if (this.time - enemy.singularityHitTimer >= 0.2) {
+                                const dmg = this.damage * 1.5 * 0.2; // 3x damage over 0.2s tick (0.5 * 3 * 0.2)
+                                enemy.takeDamage(dmg);
+                                this.game.showDamage(enemy.x, enemy.y, Math.round(dmg), '#8844ff');
+                                enemy.singularityHitTimer = this.time;
+                                if (enemy.hp <= 0) {
+                                    this.game.processEnemyDeath(enemy);
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // 5. Cyber Mine (drops cyberMineCount mines at once)
+        if (this.cyberMineCount > 0) {
+            this.mineTimer += dt;
+            if (this.mineTimer >= effectiveShootInterval * 2.0) {
+                this.mineTimer = 0;
+                for (let i = 0; i < this.cyberMineCount; i++) {
+                    const angle = (i / this.cyberMineCount) * Math.PI * 2;
+                    const spread = this.cyberMineCount > 1 ? 25 * sizeScale : 0;
+                    this.mines.push({
+                        x: this.x + Math.cos(angle) * spread,
+                        y: this.y + Math.sin(angle) * spread,
+                        radius: 15 * sizeScale, exploded: false
+                    });
+                }
+            }
+        }
+        
+        if (this.mines) {
+            this.mines = this.mines.filter(m => !m.exploded);
+            this.mines.forEach(m => {
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = m.x - enemy.x;
+                    const dy = m.y - enemy.y;
+                    if (dx*dx + dy*dy < (m.radius + enemy.radius)*(m.radius + enemy.radius)) {
+                        m.exploded = true;
+                        this.game.waveManager.enemies.forEach(e => {
+                            const edx = e.x - m.x;
+                            const edy = e.y - m.y;
+                            const blastRad = 80 * sizeScale;
+                            if (edx*edx + edy*edy < blastRad*blastRad) {
+                                e.takeDamage(this.damage * 2);
+                                this.game.showDamage(e.x, e.y, Math.round(this.damage * 2), '#ffcc00');
+                                if (e.hp <= 0) {
+                                    this.game.processEnemyDeath(e);
+                                }
+                            }
+                        });
+                        for (let i = 0; i < 10; i++) {
+                            this.game.particles.push(new Particle(this.game, m.x, m.y, '#ffcc00'));
+                        }
+                    }
+                });
+            });
+        }
+
+        // 6. Boomerang Blade (throws boomerangCount blades in fan pattern, range x2)
+        if (this.boomerangCount > 0) {
+            this.boomerangTimer += dt;
+            if (this.boomerangTimer >= effectiveShootInterval) {
+                const target = this.findNearestEnemy();
+                if (target) {
+                    this.boomerangTimer = 0;
+                    const baseAngle = Math.atan2(target.y - this.y, target.x - this.x);
+                    const spreadAngle = 0.3;
+                    const halfSpread = (this.boomerangCount - 1) / 2;
+                    for (let i = 0; i < this.boomerangCount; i++) {
+                        const angle = baseAngle + (i - halfSpread) * spreadAngle;
+                        this.boomerangs.push({
+                            x: this.x, y: this.y,
+                            startX: this.x, startY: this.y,
+                            angle: angle,
+                            distance: 0, maxDistance: 400,
+                            returning: false, radius: 15 * sizeScale, life: 4.0
+                        });
+                    }
+                }
+            }
+        }
+        
+        if (this.boomerangs) {
+            this.boomerangs = this.boomerangs.filter(b => b.life > 0);
+            this.boomerangs.forEach(b => {
+                b.life -= dt;
+                const speed = 300;
+                if (!b.returning) {
+                    b.distance += speed * dt;
+                    b.x = b.startX + Math.cos(b.angle) * b.distance;
+                    b.y = b.startY + Math.sin(b.angle) * b.distance;
+                    if (b.distance >= b.maxDistance) {
+                        b.returning = true;
+                    }
+                } else {
+                    const dx = this.x - b.x;
+                    const dy = this.y - b.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 20) {
+                        b.life = 0;
+                    } else {
+                        b.x += (dx / dist) * speed * dt;
+                        b.y += (dy / dist) * speed * dt;
+                    }
+                }
+                
+                this.game.waveManager.enemies.forEach(enemy => {
+                    const dx = b.x - enemy.x;
+                    const dy = b.y - enemy.y;
+                    if (dx*dx + dy*dy < (b.radius + enemy.radius)*(b.radius + enemy.radius)) {
+                        if (!enemy.boomerangHitTimer) enemy.boomerangHitTimer = 0;
+                        if (this.time - enemy.boomerangHitTimer > 0.3) {
+                            enemy.takeDamage(this.damage * 1.0);
+                            this.game.showDamage(enemy.x, enemy.y, Math.round(this.damage * 1.0), '#ffffff');
+                            enemy.boomerangHitTimer = this.time;
+                            if (enemy.hp <= 0) {
+                                this.game.processEnemyDeath(enemy);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+
+        
+        // Update Beams
+        if (this.beams) {
+            this.beams = this.beams.filter(b => b.life > 0);
+            this.beams.forEach(b => b.life -= dt);
         }
     }
 
@@ -3884,27 +4331,66 @@ class Player {
     findNearestEnemy() {
         let nearest = null;
         let minDist = Infinity;
-
-        // Safety check
-        if (!this.game.waveManager || !this.game.waveManager.enemies) {
-            return null;
-        }
-
+        if (!this.game.waveManager || !this.game.waveManager.enemies) return null;
         this.game.waveManager.enemies.forEach(enemy => {
             const dx = enemy.x - this.x;
             const dy = enemy.y - this.y;
             const dist = dx * dx + dy * dy;
-
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = enemy;
-            }
+            if (dist < minDist) { minDist = dist; nearest = enemy; }
         });
-
         return nearest;
     }
 
+    // Returns up to n nearest enemies (sorted by distance)
+    findNearestEnemies(n) {
+        if (!this.game.waveManager || !this.game.waveManager.enemies) return [];
+        return [...this.game.waveManager.enemies]
+            .map(e => ({ e, dist: (e.x-this.x)**2 + (e.y-this.y)**2 }))
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, n)
+            .map(item => item.e);
+    }
+
     draw(ctx) {
+        const sizeScale = this.projectileSize || 1;
+
+        // Draw Holo Decoys
+        if (this.decoys && this.decoys.length > 0) {
+            this.decoys.forEach(decoy => {
+                ctx.save();
+                ctx.translate(decoy.x, decoy.y);
+                
+                const r = this.radius;
+                
+                // Cyan Glow Aura
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = '#00ffff';
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Silhouette Body
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Digital Grid Lines
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(-r, 0);
+                ctx.lineTo(r, 0);
+                ctx.stroke();
+                
+                ctx.restore();
+            });
+        }
         // Draw Auras
         if (this.hasFrostAura) {
             ctx.save();
@@ -3912,7 +4398,7 @@ class Player {
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 200, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 200 * sizeScale, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
@@ -3923,16 +4409,95 @@ class Player {
             ctx.lineWidth = 2;
             ctx.setLineDash([10, 10]);
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 150, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 150 * sizeScale, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
+        }
+
+        if (this.singularities) {
+            this.singularities.forEach(s => {
+                ctx.save();
+                ctx.fillStyle = 'rgba(85, 0, 170, 0.4)';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Inner core
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        if (this.mines) {
+            this.mines.forEach(m => {
+                ctx.save();
+                ctx.fillStyle = '#ffcc00';
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // blinking center
+                if (Math.floor(this.time * 5) % 2 === 0) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, m.radius * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+        }
+
+        if (this.boomerangs) {
+            this.boomerangs.forEach(b => {
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.rotate(this.time * 10); // Spin fast
+                ctx.fillStyle = '#00ff55';
+                ctx.beginPath();
+                ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Blade shape
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, -b.radius);
+                ctx.lineTo(b.radius, b.radius);
+                ctx.lineTo(-b.radius, b.radius);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            });
+        }
+
+        // Draw Beams
+        if (this.beams) {
+            this.beams.forEach(b => {
+                ctx.save();
+                ctx.strokeStyle = b.color;
+                ctx.lineWidth = b.width * (b.life / b.maxLife);
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+                
+                // Add white core
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = (b.width * 0.3) * (b.life / b.maxLife);
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+                
+                ctx.restore();
+            });
         }
 
         this.projectiles.forEach(p => p.draw(ctx));
         
         // Draw Orbital Blades
         if (this.orbitalBlades && this.orbitalBlades.length > 0) {
-            const bladeRadius = 60;
+            const bladeRadius = 60 * sizeScale;
             ctx.save();
             ctx.shadowBlur = 10;
             ctx.shadowColor = '#dddddd';
@@ -3944,6 +4509,7 @@ class Player {
                 ctx.save();
                 ctx.translate(bx, by);
                 ctx.rotate(blade.angle + Math.PI/2);
+                ctx.scale(sizeScale, sizeScale);
                 ctx.beginPath();
                 ctx.moveTo(0, -10);
                 ctx.lineTo(5, 5);
@@ -4479,10 +5045,25 @@ class WaveManager {
         // Spawn the new Boss entity
         const boss = new BossClass(this.game, this.game.player.x, this.game.player.y - 300);
 
+        // Get difficulty setting multipliers (Normal: HP*0.5/Atk*0.3, Hard: HP*0.6/Atk*0.6, Very Hard: HP*1.0/Atk*1.0)
+        let hpMultiplier = 1.0;
+        let damageMultiplier = 1.0;
+        const diffSetting = this.game.selectedDifficulty;
+        if (diffSetting === 'normal') {
+            hpMultiplier = 0.5;
+            damageMultiplier = 0.3;
+        } else if (diffSetting === 'hard') {
+            hpMultiplier = 0.6;
+            damageMultiplier = 0.6;
+        } else if (diffSetting === 'veryhard') {
+            hpMultiplier = 1.0;
+            damageMultiplier = 1.0;
+        }
+
         // Scale Boss stats
-        boss.hp *= this.difficulty;
-        boss.maxHp *= this.difficulty;
-        boss.damage *= this.difficulty;
+        boss.hp *= this.difficulty * hpMultiplier;
+        boss.maxHp *= this.difficulty * hpMultiplier;
+        boss.damage *= this.difficulty * damageMultiplier;
 
         // Map Level Scaling (Make later bosses even tougher)
         const mapLevel = this.game.mapLevel || 1;
@@ -4551,14 +5132,48 @@ class WaveManager {
 
     spawnChest() {
         // Spawn chest near player
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 200 + Math.random() * 200;
-        const x = this.game.player.x + Math.cos(angle) * dist;
-        const y = this.game.player.y + Math.sin(angle) * dist;
+        let cx = 0, cy = 0;
+        let chestSpawned = false;
+        let attempts = 0;
 
-        // Clamp to world
-        const cx = Math.max(50, Math.min(x, this.game.worldWidth - 50));
-        const cy = Math.max(50, Math.min(y, this.game.worldHeight - 50));
+        while (!chestSpawned && attempts < 100) {
+            attempts++;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 200 + Math.random() * 200;
+            const x = this.game.player.x + Math.cos(angle) * dist;
+            const y = this.game.player.y + Math.sin(angle) * dist;
+
+            // Clamp to world
+            const tx = Math.max(50, Math.min(x, this.game.worldWidth - 50));
+            const ty = Math.max(50, Math.min(y, this.game.worldHeight - 50));
+
+            // Check collision with obstacles
+            let overlaps = false;
+            if (this.game.obstacles) {
+                for (const obs of this.game.obstacles) {
+                    const odx = tx - obs.x;
+                    const ody = ty - obs.y;
+                    if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) { // Obstacle radius (30) + Chest radius (20) + padding
+                        overlaps = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!overlaps) {
+                cx = tx;
+                cy = ty;
+                chestSpawned = true;
+            }
+        }
+
+        // Fallback in case we couldn't find a free spot in 100 attempts
+        if (!chestSpawned) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 200 + Math.random() * 200;
+            cx = Math.max(50, Math.min(this.game.player.x + Math.cos(angle) * dist, this.game.worldWidth - 50));
+            cy = Math.max(50, Math.min(this.game.player.y + Math.sin(angle) * dist, this.game.worldHeight - 50));
+        }
 
         this.game.chests.push(new Chest(this.game, cx, cy));
         console.log("Chest Spawned!");
@@ -4680,11 +5295,27 @@ class WaveManager {
             // HP: 時間経過で指数的に上昇（序盤は控えめ、後半は大きく）
             // difficulty^1.5 で序盤を緩やかに（1.8→1.5に調整）
             const hpScaling = Math.pow(this.difficulty, 1.5);
-            enemyType.hp *= hpScaling;
-            enemyType.maxHp *= hpScaling;
+            
+            // Get difficulty setting multipliers (Normal: HP*0.5/Atk*0.3, Hard: HP*0.6/Atk*0.6, Very Hard: HP*1.0/Atk*1.0)
+            let hpMultiplier = 1.0;
+            let damageMultiplier = 1.0;
+            const diffSetting = this.game.selectedDifficulty;
+            if (diffSetting === 'normal') {
+                hpMultiplier = 0.5;
+                damageMultiplier = 0.3;
+            } else if (diffSetting === 'hard') {
+                hpMultiplier = 0.6;
+                damageMultiplier = 0.6;
+            } else if (diffSetting === 'veryhard') {
+                hpMultiplier = 1.0;
+                damageMultiplier = 1.0;
+            }
+
+            enemyType.hp *= hpScaling * hpMultiplier;
+            enemyType.maxHp *= hpScaling * hpMultiplier;
 
             // Damage: 線形スケーリングのまま（HPほど上げない）
-            enemyType.damage *= this.difficulty;
+            enemyType.damage *= this.difficulty * damageMultiplier;
 
             // Map Level Scaling: 廃止
 
@@ -4760,7 +5391,7 @@ class SkillTree {
         // Advanced Nodes (Attached to the ends of chains)
         this.nodes['multi1'] = { id: 'multi1', name: 'Splitter Module', desc: 'Shoot +1 Bullet', cost: 3000, x: this.nodes[lastAtk].x + 80, y: this.nodes[lastAtk].y, requires: [lastAtk], effect: (p) => p.multiShotCount = (p.multiShotCount || 1) + 1, color: '#ff00aa' };
         this.nodes['pierce1'] = { id: 'pierce1', name: 'Plasma Orb', desc: 'Pierce +1', cost: 3000, x: this.nodes[lastRate].x + 60, y: this.nodes[lastRate].y - 60, requires: [lastRate], effect: (p) => p.pierceShotCount = (p.pierceShotCount || 0) + 1, color: '#00ccff' };
-        this.nodes['lifesteal1'] = { id: 'lifesteal1', name: 'Vampire Protocol', desc: '10% chance to heal on hit', cost: 3000, x: this.nodes[lastRegen].x - 60, y: this.nodes[lastRegen].y + 60, requires: [lastRegen], effect: (p) => p.lifeStealChance = (p.lifeStealChance || 0) + 0.1, color: '#cc0044' };
+        this.nodes['lifesteal1'] = { id: 'lifesteal1', name: 'Vampire Protocol', desc: '5% chance to heal 1 HP on hit (Max 50/s)', cost: 3000, x: this.nodes[lastRegen].x - 60, y: this.nodes[lastRegen].y + 60, requires: [lastRegen], effect: (p) => p.lifeStealChance = (p.lifeStealChance || 0) + 0.05, color: '#cc0044' };
     }
 
     reset() {
@@ -4821,85 +5452,93 @@ class UIManager {
             // 4-Tier Stat Boosts
             // ----------------------------------------------------
             // 1. Attack Damage
-            { id: 'atk_up_1', name: 'Cyber Katana (C)', desc: 'Attack Damage +10%', cost: 12, rarity: 'common', color: '#ff4444', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => p.damage *= 1.10 },
-            { id: 'atk_up_2', name: 'Cyber Katana (R)', desc: 'Attack Damage +15%', cost: 18, rarity: 'rare', color: '#ff4444', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => p.damage *= 1.15 },
-            { id: 'atk_up_3', name: 'Cyber Katana (E)', desc: 'Attack Damage +20%', cost: 26, rarity: 'epic', color: '#ff4444', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => p.damage *= 1.20 },
-            { id: 'atk_up_4', name: 'Cyber Katana (L)', desc: 'Attack Damage +25%', cost: 40, rarity: 'legendary', color: '#ff4444', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => p.damage *= 1.25 },
+            { id: 'atk_up_1', name: 'Cyber Katana (C)', desc: 'Attack Damage +10%', cost: 12, rarity: 'common', color: '#ff4444', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => p.damage *= 1.10 },
+            { id: 'atk_up_2', name: 'Cyber Katana (R)', desc: 'Attack Damage +15%', cost: 18, rarity: 'rare', color: '#ff4444', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => p.damage *= 1.15 },
+            { id: 'atk_up_3', name: 'Cyber Katana (E)', desc: 'Attack Damage +20%', cost: 26, rarity: 'epic', color: '#ff4444', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => p.damage *= 1.20 },
+            { id: 'atk_up_4', name: 'Cyber Katana (L)', desc: 'Attack Damage +25%', cost: 40, rarity: 'legendary', color: '#ff4444', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => p.damage *= 1.25 },
 
             // 2. Move Speed
-            { id: 'spd_up_1', name: 'Neko Headphones (C)', desc: 'Move Speed +10%', cost: 12, rarity: 'common', color: '#4444ff', rarityBorder: '#888888', weight: 10, category: 'blue', effect: (p) => p.speed *= 1.10 },
-            { id: 'spd_up_2', name: 'Neko Headphones (R)', desc: 'Move Speed +15%', cost: 18, rarity: 'rare', color: '#4444ff', rarityBorder: '#4466ff', weight: 5, category: 'blue', effect: (p) => p.speed *= 1.15 },
-            { id: 'spd_up_3', name: 'Neko Headphones (E)', desc: 'Move Speed +20%', cost: 26, rarity: 'epic', color: '#4444ff', rarityBorder: '#aa00ff', weight: 2, category: 'blue', effect: (p) => p.speed *= 1.20 },
-            { id: 'spd_up_4', name: 'Neko Headphones (L)', desc: 'Move Speed +25%', cost: 40, rarity: 'legendary', color: '#4444ff', rarityBorder: '#ff8800', weight: 1, category: 'blue', effect: (p) => p.speed *= 1.25 },
+            { id: 'spd_up_1', name: 'Neko Headphones (C)', desc: 'Move Speed +3%', cost: 12, rarity: 'common', color: '#4444ff', rarityBorder: '#888888', weight: 58, category: 'blue', effect: (p) => p.speed *= 1.03 },
+            { id: 'spd_up_2', name: 'Neko Headphones (R)', desc: 'Move Speed +5%', cost: 18, rarity: 'rare', color: '#4444ff', rarityBorder: '#4466ff', weight: 35, category: 'blue', effect: (p) => p.speed *= 1.05 },
+            { id: 'spd_up_3', name: 'Neko Headphones (E)', desc: 'Move Speed +10%', cost: 26, rarity: 'epic', color: '#4444ff', rarityBorder: '#aa00ff', weight: 5, category: 'blue', effect: (p) => p.speed *= 1.10 },
+            { id: 'spd_up_4', name: 'Neko Headphones (L)', desc: 'Move Speed +15%', cost: 40, rarity: 'legendary', color: '#4444ff', rarityBorder: '#ff8800', weight: 2, category: 'blue', effect: (p) => p.speed *= 1.15 },
 
             // 3. Max HP
-            { id: 'hp_up_1', name: 'Energy Drink (C)', desc: 'Max HP +30', cost: 12, rarity: 'common', color: '#44ff44', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { p.maxHp += 30; p.hp += 30; } },
-            { id: 'hp_up_2', name: 'Energy Drink (R)', desc: 'Max HP +50', cost: 18, rarity: 'rare', color: '#44ff44', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { p.maxHp += 50; p.hp += 50; } },
-            { id: 'hp_up_3', name: 'Energy Drink (E)', desc: 'Max HP +80', cost: 26, rarity: 'epic', color: '#44ff44', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { p.maxHp += 80; p.hp += 80; } },
-            { id: 'hp_up_4', name: 'Energy Drink (L)', desc: 'Max HP +120', cost: 40, rarity: 'legendary', color: '#44ff44', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { p.maxHp += 120; p.hp += 120; } },
+            { id: 'hp_up_1', name: 'Energy Drink (C)', desc: 'Max HP +30', cost: 12, rarity: 'common', color: '#44ff44', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { p.maxHp += 30; p.hp += 30; } },
+            { id: 'hp_up_2', name: 'Energy Drink (R)', desc: 'Max HP +50', cost: 18, rarity: 'rare', color: '#44ff44', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { p.maxHp += 50; p.hp += 50; } },
+            { id: 'hp_up_3', name: 'Energy Drink (E)', desc: 'Max HP +80', cost: 26, rarity: 'epic', color: '#44ff44', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { p.maxHp += 80; p.hp += 80; } },
+            { id: 'hp_up_4', name: 'Energy Drink (L)', desc: 'Max HP +120', cost: 40, rarity: 'legendary', color: '#44ff44', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { p.maxHp += 120; p.hp += 120; } },
 
             // 4. Fire Rate (Lower interval is better)
-            { id: 'rate_up_1', name: 'Overclock Chip (C)', desc: 'Fire Rate +10%', cost: 12, rarity: 'common', color: '#ffaa00', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => p.shootInterval *= 0.90 },
-            { id: 'rate_up_2', name: 'Overclock Chip (R)', desc: 'Fire Rate +15%', cost: 18, rarity: 'rare', color: '#ffaa00', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => p.shootInterval *= 0.85 },
-            { id: 'rate_up_3', name: 'Overclock Chip (E)', desc: 'Fire Rate +20%', cost: 26, rarity: 'epic', color: '#ffaa00', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => p.shootInterval *= 0.80 },
-            { id: 'rate_up_4', name: 'Overclock Chip (L)', desc: 'Fire Rate +25%', cost: 40, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => p.shootInterval *= 0.75 },
+            { id: 'rate_up_1', name: 'Overclock Chip (C)', desc: 'Fire Rate +5%', cost: 12, rarity: 'common', color: '#ffaa00', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => p.shootInterval *= 0.95 },
+            { id: 'rate_up_2', name: 'Overclock Chip (R)', desc: 'Fire Rate +10%', cost: 18, rarity: 'rare', color: '#ffaa00', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => p.shootInterval *= 0.90 },
+            { id: 'rate_up_3', name: 'Overclock Chip (E)', desc: 'Fire Rate +15%', cost: 26, rarity: 'epic', color: '#ffaa00', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => p.shootInterval *= 0.85 },
+            { id: 'rate_up_4', name: 'Overclock Chip (L)', desc: 'Fire Rate +20%', cost: 40, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => p.shootInterval *= 0.80 },
 
             // 5. HP Regen
-            { id: 'hp_regen_1', name: 'Nano Repair (C)', desc: 'HP Regen +0.5/sec', cost: 12, rarity: 'common', color: '#44ff88', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 0.5; } },
-            { id: 'hp_regen_2', name: 'Nano Repair (R)', desc: 'HP Regen +1.0/sec', cost: 18, rarity: 'rare', color: '#44ff88', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.0; } },
-            { id: 'hp_regen_3', name: 'Nano Repair (E)', desc: 'HP Regen +1.5/sec', cost: 26, rarity: 'epic', color: '#44ff88', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.5; } },
-            { id: 'hp_regen_4', name: 'Nano Repair (L)', desc: 'HP Regen +2.0/sec', cost: 40, rarity: 'legendary', color: '#44ff88', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 2.0; } },
+            { id: 'hp_regen_1', name: 'Nano Repair (C)', desc: 'HP Regen +0.5/sec', cost: 12, rarity: 'common', color: '#44ff88', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 0.5; } },
+            { id: 'hp_regen_2', name: 'Nano Repair (R)', desc: 'HP Regen +1.0/sec', cost: 18, rarity: 'rare', color: '#44ff88', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.0; } },
+            { id: 'hp_regen_3', name: 'Nano Repair (E)', desc: 'HP Regen +1.5/sec', cost: 26, rarity: 'epic', color: '#44ff88', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.5; } },
+            { id: 'hp_regen_4', name: 'Nano Repair (L)', desc: 'HP Regen +2.0/sec', cost: 40, rarity: 'legendary', color: '#44ff88', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 2.0; } },
 
             // 6. Crit Chance
-            { id: 'crit_chance_1', name: 'Lucky Dice (C)', desc: 'Crit Chance +5%', cost: 12, rarity: 'common', color: '#ffdd00', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.05; } },
-            { id: 'crit_chance_2', name: 'Lucky Dice (R)', desc: 'Crit Chance +10%', cost: 18, rarity: 'rare', color: '#ffdd00', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.10; } },
-            { id: 'crit_chance_3', name: 'Lucky Dice (E)', desc: 'Crit Chance +15%', cost: 26, rarity: 'epic', color: '#ffdd00', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.15; } },
-            { id: 'crit_chance_4', name: 'Lucky Dice (L)', desc: 'Crit Chance +20%', cost: 40, rarity: 'legendary', color: '#ffdd00', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.20; } },
+            { id: 'crit_chance_1', name: 'Lucky Dice (C)', desc: 'Crit Chance +5%', cost: 12, rarity: 'common', color: '#ffdd00', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.05; } },
+            { id: 'crit_chance_2', name: 'Lucky Dice (R)', desc: 'Crit Chance +10%', cost: 18, rarity: 'rare', color: '#ffdd00', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.10; } },
+            { id: 'crit_chance_3', name: 'Lucky Dice (E)', desc: 'Crit Chance +15%', cost: 26, rarity: 'epic', color: '#ffdd00', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.15; } },
+            { id: 'crit_chance_4', name: 'Lucky Dice (L)', desc: 'Crit Chance +20%', cost: 40, rarity: 'legendary', color: '#ffdd00', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.20; } },
 
             // 7. Projectile Size
-            { id: 'projectile_size_1', name: 'Amplifier Core (C)', desc: 'Proj Size +15%', cost: 12, rarity: 'common', color: '#ff6600', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.15; } },
-            { id: 'projectile_size_2', name: 'Amplifier Core (R)', desc: 'Proj Size +30%', cost: 18, rarity: 'rare', color: '#ff6600', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.30; } },
-            { id: 'projectile_size_3', name: 'Amplifier Core (E)', desc: 'Proj Size +45%', cost: 26, rarity: 'epic', color: '#ff6600', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.45; } },
-            { id: 'projectile_size_4', name: 'Amplifier Core (L)', desc: 'Proj Size +60%', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.60; } },
+            { id: 'projectile_size_1', name: 'Amplifier Core (C)', desc: 'Proj Size +10%', cost: 12, rarity: 'common', color: '#ff6600', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.10; } },
+            { id: 'projectile_size_2', name: 'Amplifier Core (R)', desc: 'Proj Size +15%', cost: 18, rarity: 'rare', color: '#ff6600', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.15; } },
+            { id: 'projectile_size_3', name: 'Amplifier Core (E)', desc: 'Proj Size +20%', cost: 26, rarity: 'epic', color: '#ff6600', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.20; } },
+            { id: 'projectile_size_4', name: 'Amplifier Core (L)', desc: 'Proj Size +25%', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.25; } },
 
             // 8. Damage Reduction (Armor)
-            { id: 'armor_plate_1', name: 'Titanium Plating (C)', desc: 'Dmg Taken -10%', cost: 12, rarity: 'common', color: '#999999', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.90; } },
-            { id: 'armor_plate_2', name: 'Titanium Plating (R)', desc: 'Dmg Taken -15%', cost: 18, rarity: 'rare', color: '#999999', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.85; } },
-            { id: 'armor_plate_3', name: 'Titanium Plating (E)', desc: 'Dmg Taken -20%', cost: 26, rarity: 'epic', color: '#999999', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.80; } },
-            { id: 'armor_plate_4', name: 'Titanium Plating (L)', desc: 'Dmg Taken -25%', cost: 40, rarity: 'legendary', color: '#999999', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.75; } },
+            { id: 'armor_plate_1', name: 'Titanium Plating (C)', desc: 'Dmg Taken -10%', cost: 12, rarity: 'common', color: '#999999', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.90; } },
+            { id: 'armor_plate_2', name: 'Titanium Plating (R)', desc: 'Dmg Taken -15%', cost: 18, rarity: 'rare', color: '#999999', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.85; } },
+            { id: 'armor_plate_3', name: 'Titanium Plating (E)', desc: 'Dmg Taken -20%', cost: 26, rarity: 'epic', color: '#999999', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.80; } },
+            { id: 'armor_plate_4', name: 'Titanium Plating (L)', desc: 'Dmg Taken -25%', cost: 40, rarity: 'legendary', color: '#999999', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.75; } },
 
             // ----------------------------------------------------
             // Unique / Utility / Method items (Kept from original)
             // ----------------------------------------------------
-            { id: 'pierce_shot', name: 'Plasma Orb', desc: 'Fire penetrating orbs +1', cost: 28, rarity: 'rare', color: '#00aaff', rarityBorder: '#4466ff', weight: 7, category: 'yellow', effect: (p) => { if (!p.pierceShotCount) p.pierceShotCount = 0; p.pierceShotCount++; } },
-            { id: 'range_up', name: 'Scope Lens', desc: 'Magnet Range +50%', cost: 10, rarity: 'rare', color: '#00ffff', rarityBorder: '#4466ff', weight: 7, category: 'blue', effect: (p) => { /* Handled in Drop */ } },
-            { id: 'shield_gen', name: 'Energy Barrier', desc: 'Shield absorbs 20 damage', cost: 28, rarity: 'rare', color: '#8888ff', rarityBorder: '#4466ff', weight: 7, category: 'green', effect: (p) => { if (!p.shield) p.shield = 0; p.shield += 20; if (!p.maxShield) p.maxShield = 0; p.maxShield += 20; } },
-            { id: 'multishot', name: 'Splitter Module', desc: 'Shoot 2 extra bullets', cost: 32, rarity: 'rare', color: '#ff4488', rarityBorder: '#4466ff', weight: 7, category: 'yellow', effect: (p) => { if (!p.multiShotCount) p.multiShotCount = 1; p.multiShotCount += 1; } },
+            { id: 'pierce_shot', name: 'Plasma Orb', desc: 'Fire penetrating orbs +1', cost: 28, rarity: 'legendary', color: '#00aaff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { if (!p.pierceShotCount) p.pierceShotCount = 0; p.pierceShotCount++; } },
+            { id: 'range_up', name: 'Scope Lens', desc: 'Magnet Range +50%', cost: 10, rarity: 'rare', color: '#00ffff', rarityBorder: '#4466ff', weight: 35, category: 'blue', effect: (p) => { /* Handled in Drop */ } },
+            { id: 'shield_gen', name: 'Energy Barrier', desc: 'Shield absorbs 20 damage', cost: 28, rarity: 'rare', color: '#8888ff', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.shield) p.shield = 0; p.shield += 20; if (!p.maxShield) p.maxShield = 0; p.maxShield += 20; } },
+            { id: 'multishot', name: 'Splitter Module', desc: 'Shoot 2 extra bullets', cost: 32, rarity: 'legendary', color: '#ff4488', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { if (!p.multiShotCount) p.multiShotCount = 1; p.multiShotCount += 1; } },
 
             // Epic (エピック) - 強力な強化
-            { id: 'drone', name: 'Support Drone', desc: 'Summons a drone', cost: 32, rarity: 'epic', color: '#00ffaa', rarityBorder: '#aa00ff', weight: 4, category: 'yellow', effect: (p) => p.game.addDrone() },
-            { id: 'lifesteal', name: 'Vampire Fang', desc: '20% chance to heal +1 HP on hit', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#aa00ff', weight: 4, category: 'green', effect: (p) => { if (!p.lifeStealChance) p.lifeStealChance = 0.20; else p.lifeStealChance *= 1.5; } },
-            { id: 'time_warp', name: 'Chrono Lens', desc: 'Speed +20%, Fire Rate +15%', cost: 44, rarity: 'epic', color: '#00ccff', rarityBorder: '#aa00ff', weight: 4, category: 'blue', effect: (p) => { p.speed *= 1.2; p.shootInterval *= 0.85; } },
-            { id: 'missile', name: 'Missile Pod', desc: 'Fires homing missiles', cost: 40, rarity: 'epic', color: '#ff0088', rarityBorder: '#aa00ff', weight: 4, category: 'yellow', effect: (p) => p.missileCount++ },
+            { id: 'drone', name: 'Support Drone', desc: 'Summons a drone', cost: 32, rarity: 'legendary', color: '#00ffaa', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => p.game.addDrone() },
+            { id: 'lifesteal', name: 'Vampire Fang', desc: '20% chance to heal +1 HP on hit', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#aa00ff', weight: 5, category: 'green', disabled: true, effect: (p) => { if (!p.lifeStealChance) p.lifeStealChance = 0.20; else p.lifeStealChance *= 1.5; } },
+            { id: 'time_warp', name: 'Chrono Lens', desc: 'Speed +5%, Fire Rate +10%', cost: 44, rarity: 'epic', color: '#00ccff', rarityBorder: '#aa00ff', weight: 5, category: 'blue', effect: (p) => { p.speed *= 1.05; p.shootInterval *= 0.90; } },
+            { id: 'missile', name: 'Missile Pod', desc: 'Fires homing missiles', cost: 40, rarity: 'legendary', color: '#ff0088', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => p.missileCount++ },
 
             // Legendary (レジェンダリー) - 超強力
             { id: 'phoenix_heart', name: 'Phoenix Heart', desc: 'Revive once on death', cost: 64, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.reviveCount) p.reviveCount = 0; p.reviveCount++; } },
             { id: 'phoenix_heart_used', name: 'Phoenix Heart (Used)', desc: 'Already consumed', cost: 0, rarity: 'legendary', color: '#666666', rarityBorder: '#444444', weight: 0, category: 'none', effect: (p) => { /* No effect */ } },
             
             // Special Effects (オレンジ - 特殊効果)
-            { id: 'volatile_core', name: 'Volatile Core', desc: 'Explosion on enemy kill', cost: 45, rarity: 'epic', color: '#ff5500', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasVolatileCore = true },
-            { id: 'soul_seekers', name: 'Soul Seekers', desc: 'Fires missiles on enemy kill', cost: 50, rarity: 'epic', color: '#ff8800', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasSoulSeekers = true },
-            { id: 'revenge_protocol', name: 'Revenge Protocol', desc: 'Counter shockwave when hit', cost: 40, rarity: 'epic', color: '#ff6600', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasRevengeProtocol = true },
-            { id: 'chain_lightning', name: 'Chain Lightning', desc: 'Attacks can chain to nearby enemies', cost: 55, rarity: 'legendary', color: '#ffee00', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasChainLightning = true },
-            { id: 'frost_aura', name: 'Frost Aura', desc: 'Slows down nearby enemies', cost: 45, rarity: 'epic', color: '#00ccff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasFrostAura = true },
-            { id: 'executioner', name: 'Executioner', desc: 'Double damage to low HP enemies', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasExecutioner = true },
-            { id: 'repulsion_shield', name: 'Repulsion Shield', desc: 'Knockback enemies when hit', cost: 35, rarity: 'epic', color: '#aaaaff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasRepulsionShield = true },
-            { id: 'midas_touch', name: 'Midas Touch', desc: 'Extra Ene drop on kill', cost: 50, rarity: 'legendary', color: '#ffd700', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasMidasTouch = true },
-            { id: 'adrenaline', name: 'Adrenaline', desc: 'Extreme speed/fire rate at low HP', cost: 40, rarity: 'epic', color: '#ff2222', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasAdrenaline = true },
-            { id: 'orbital_blades', name: 'Orbital Blades', desc: 'Spinning blades damage nearby enemies', cost: 55, rarity: 'legendary', color: '#dddddd', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.game.addOrbitalBlades() },
-            { id: 'time_stop', name: 'Time Stop', desc: 'Stop time when picking up potion', cost: 50, rarity: 'legendary', color: '#aa00ff', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasTimeStop = true },
-            { id: 'holo_decoy', name: 'Holo Decoy', desc: 'Leave a decoy when taking damage', cost: 40, rarity: 'epic', color: '#00ffff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasHoloDecoy = true },
-            { id: 'vampiric_aura', name: 'Vampiric Aura', desc: 'Drain HP from nearby enemies', cost: 60, rarity: 'legendary', color: '#990033', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasVampiricAura = true }
+            { id: 'volatile_core', name: 'Volatile Core', desc: 'Explosion on enemy kill', cost: 45, rarity: 'legendary', color: '#ff5500', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasVolatileCore = true },
+            { id: 'soul_seekers', name: 'Soul Seekers', desc: 'Fires missiles on enemy kill', cost: 50, rarity: 'legendary', color: '#ff8800', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasSoulSeekers = true },
+            { id: 'revenge_protocol', name: 'Revenge Protocol', desc: 'Counter shockwave when hit', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasRevengeProtocol = true },
+            { id: 'chain_lightning', name: 'Chain Lightning', desc: 'Attacks can chain to nearby enemies', cost: 55, rarity: 'legendary', color: '#ffee00', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasChainLightning = true },
+            { id: 'frost_aura', name: 'Frost Aura', desc: 'Slows down nearby enemies', cost: 45, rarity: 'legendary', color: '#00ccff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasFrostAura = true },
+            { id: 'executioner', name: 'Executioner', desc: 'Double damage to low HP enemies', cost: 40, rarity: 'legendary', color: '#cc0044', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasExecutioner = true },
+            { id: 'repulsion_shield', name: 'Repulsion Shield', desc: 'Knockback enemies when hit', cost: 35, rarity: 'legendary', color: '#aaaaff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasRepulsionShield = true },
+            { id: 'midas_touch', name: 'Midas Touch', desc: 'Extra Ene drop on kill', cost: 50, rarity: 'legendary', color: '#ffd700', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasMidasTouch = true },
+            { id: 'adrenaline', name: 'Adrenaline', desc: 'Extreme speed/fire rate at low HP', cost: 40, rarity: 'legendary', color: '#ff2222', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasAdrenaline = true },
+            { id: 'orbital_blades', name: 'Orbital Blades', desc: 'Spinning blades damage nearby enemies', cost: 55, rarity: 'legendary', color: '#dddddd', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.game.addOrbitalBlades() },
+            { id: 'time_stop', name: 'Time Stop', desc: 'Stop time when picking up potion', cost: 50, rarity: 'legendary', color: '#aa00ff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasTimeStop = true },
+            { id: 'holo_decoy', name: 'Holo Decoy', desc: 'Leave a decoy when taking damage', cost: 40, rarity: 'legendary', color: '#00ffff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasHoloDecoy = true },
+            { id: 'vampiric_aura', name: 'Vampiric Aura', desc: 'Drain HP from nearby enemies', cost: 60, rarity: 'legendary', color: '#990033', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasVampiricAura = true },
+            
+            // New Weapons (Yellow Category)
+            { id: 'satellite_beam', name: 'Satellite Beam', desc: 'Fire massive beam from sky (+1 target)', cost: 45, rarity: 'legendary', color: '#ff00ff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.satelliteBeamCount = (p.satelliteBeamCount || 0) + 1; } },
+            { id: 'singularity', name: 'Singularity', desc: 'Create black holes that pull enemies (+1)', cost: 50, rarity: 'legendary', color: '#5500aa', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.singularityCount = (p.singularityCount || 0) + 1; } },
+            { id: 'cyber_mine', name: 'Cyber Mine', desc: 'Drop mines behind you (+1)', cost: 35, rarity: 'legendary', color: '#ffcc00', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.cyberMineCount = (p.cyberMineCount || 0) + 1; } },
+            { id: 'railgun', name: 'Railgun', desc: 'Powerful piercing laser (+1 beam)', cost: 45, rarity: 'legendary', color: '#00ffff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.railgunCount = (p.railgunCount || 0) + 1; } },
+            { id: 'boomerang_blade', name: 'Boomerang Blade', desc: 'Throws returning blades (+1)', cost: 40, rarity: 'legendary', color: '#00ff55', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.boomerangCount = (p.boomerangCount || 0) + 1; } },
+            { id: 'cyber_fangs', name: 'Cyber Fangs', desc: 'Spikes from ground on enemies (+3 targets)', cost: 40, rarity: 'legendary', color: '#ff0055', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.cyberFangsCount = (p.cyberFangsCount || 0) + 1; } }
         ];
 
         this.setupScreens();
@@ -4911,19 +5550,21 @@ class UIManager {
         this.screens.title = this.createScreen('title-screen', `
             <h1 class="title-text">Cyber<br>Survivor</h1>
             <button id="btn-start" class="cyber-btn">START</button>
-            <button id="btn-options" class="cyber-btn secondary" style="display:none;">OPTIONS</button>
+            <!-- Hide OPTIONS button but keep for future restoration -->
+            <button id="btn-options" class="cyber-btn secondary" style="display: none;">OPTIONS</button>
             <button id="btn-reset" class="cyber-btn secondary" style="margin-top: 20px; background: #ff4444;">RESET DATA</button>
         `);
 
         // Options Screen
         this.screens.options = this.createScreen('options-screen', `
             <h2>OPTIONS</h2>
-            <div class="options-container">
+            <div class="options-container scrollable" style="max-height: 75vh; overflow-y: auto; width: 90%; max-width: 500px;">
                 <label class="cyber-checkbox">
                     <input type="checkbox" id="chk-debug">
                     <span class="checkmark"></span>
                     DEBUG MODE (x100 Ene)
                 </label>
+                <button id="btn-debug-money" class="cyber-btn small" style="margin-top: 10px; width: 100%; color: #ffd700; border-color: #ffd700; font-weight: bold; background: rgba(255, 215, 0, 0.1);">💰 ADD 10,000 CREDITS</button>
                 <div class="debug-option" style="margin-top: 15px;">
                     <label style="color: #00ffff; font-size: 14px; display: block; margin-bottom: 5px;">TEST BOSS (Debug Only):</label>
                     <select id="debug-boss-select" class="cyber-btn small" style="width: 100%; background: #000; color: #00ffff; border: 1px solid #00ffff;">
@@ -4941,8 +5582,16 @@ class UIManager {
                         <option value="celestial_eye">CELESTIAL EYE</option>
                     </select>
                 </div>
+
+                <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
+                    <label style="color: #ff00ff; font-size: 14px; display: block; margin-bottom: 10px;">⚡ DEBUG ITEM CHEATS (Give to Player):</label>
+                    <div id="debug-abilities-container" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 250px; overflow-y: auto; padding: 6px; border: 1px solid #333; background: #050505; width: 100%; box-sizing: border-box;">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <div id="debug-ability-msg" style="margin-top: 8px; color: #0f0; font-size: 12px; min-height: 18px;"></div>
+                </div>
             </div>
-            <button id="btn-close-options" class="cyber-btn secondary">CLOSE</button>
+            <button id="btn-close-options" class="cyber-btn secondary" style="margin-top: 10px;">CLOSE</button>
         `);
 
         // Home Screen
@@ -5015,6 +5664,8 @@ class UIManager {
                     <!-- Center is now empty or can be used for other things -->
                 </div>
                 <div class="hud-right">
+                    <!-- Hide PAUSE button but keep for future restoration -->
+                    <button id="btn-hud-pause" class="cyber-btn small" style="margin-bottom: 5px; pointer-events: auto; display: none;">PAUSE</button>
                     <!-- Minimap is positioned via CSS -->
                     <div id="kill-counter-container" class="kill-counter-container">
                         <span id="kill-counter-label" class="kill-label">SIGNAL:</span>
@@ -5096,6 +5747,7 @@ class UIManager {
                     <div class="result-section" style="text-align: left; padding: 10px 20px; background: rgba(0,0,0,0.3); border-radius: 5px; margin-top: 10px;">
                         <p style="margin: 5px 0; font-size: 16px;">Damage Dealt: <span id="victory-dmg-dealt" style="color: #ffaa00; font-weight: bold; float: right;">0</span></p>
                         <p style="margin: 5px 0; font-size: 16px;">Damage Taken: <span id="victory-dmg-taken" style="color: #ff4444; font-weight: bold; float: right;">0</span></p>
+                        <p style="margin: 5px 0; font-size: 16px;">Money Earned: <span id="victory-run-money" style="color: #ffd700; font-weight: bold; float: right;">0</span></p>
                     </div>
                 </div>
                 <button id="btn-victory-home" class="cyber-btn">RETURN TO HOME</button>
@@ -5229,7 +5881,21 @@ class UIManager {
         });
 
         // Options
-        this.bindButton('btn-close-options', () => this.showScreen('title'));
+        this.bindButton('btn-close-options', () => {
+            if (this.isIngameOptions) {
+                this.isIngameOptions = false;
+                this.game.setState('playing');
+            } else {
+                this.showScreen('title');
+                this.game.state = 'title';
+            }
+        });
+
+        // HUD Pause
+        this.bindButton('btn-hud-pause', () => {
+            this.isIngameOptions = true;
+            this.game.setState('options');
+        });
 
         const chkDebug = document.getElementById('chk-debug');
         if (chkDebug) {
@@ -5239,11 +5905,77 @@ class UIManager {
             });
         }
 
+        const btnDebugMoney = document.getElementById('btn-debug-money');
+        if (btnDebugMoney) {
+            btnDebugMoney.addEventListener('click', () => {
+                this.game.money = (this.game.money || 0) + 10000;
+                this.game.upgradeSystem.save();
+                console.log('Debug Money Added! Total:', this.game.money);
+                
+                // Update money display on Home Screen
+                const elHome = document.getElementById('player-money');
+                if (elHome) elHome.innerText = this.game.money;
+                
+                // Update money display on SkillTree Screen
+                const elSkill = document.getElementById('skill-money');
+                if (elSkill) elSkill.innerText = this.game.money;
+            });
+        }
+
         const selBoss = document.getElementById('debug-boss-select');
         if (selBoss) {
             selBoss.addEventListener('change', (e) => {
                 this.game.debugBoss = e.target.value;
                 console.log('Debug Boss Set:', this.game.debugBoss);
+            });
+        }
+
+        // Debug: Test Ability Buttons (Dynamic Generation)
+        const container = document.getElementById('debug-abilities-container');
+        if (container) {
+            container.innerHTML = '';
+            const categoryOrder = { red: 1, blue: 2, green: 3, yellow: 4, orange: 5, none: 6 };
+            const sortedRelics = [...this.relics].sort((a, b) => {
+                const catA = categoryOrder[a.category] || 9;
+                const catB = categoryOrder[b.category] || 9;
+                if (catA !== catB) return catA - catB;
+                return a.name.localeCompare(b.name);
+            });
+
+            sortedRelics.forEach(relic => {
+                if (relic.id === 'phoenix_heart_used') return;
+
+                const btn = document.createElement('button');
+                btn.className = 'cyber-btn small debug-ability-btn';
+                btn.style.fontSize = '10px';
+                btn.style.padding = '4px 6px';
+                btn.style.margin = '2px';
+                btn.style.borderColor = relic.color;
+                btn.style.color = relic.color;
+                btn.style.flex = '1 1 auto';
+                btn.style.textAlign = 'center';
+                btn.textContent = relic.name;
+                if (relic.disabled) {
+                    btn.textContent += ' [DIS]';
+                }
+                
+                btn.addEventListener('click', () => {
+                    const msgEl = document.getElementById('debug-ability-msg');
+                    const p = this.game.player;
+                    if (!p) {
+                        if (msgEl) msgEl.textContent = '⚠ ゲームプレイ中のみ使用可能 (Start a run first)';
+                        return;
+                    }
+                    try {
+                        relic.effect(p);
+                        this.game.acquiredRelics.push(relic);
+                        if (msgEl) msgEl.textContent = `✔ Applied: ${relic.name}`;
+                        this.game.audio.playUpgrade();
+                    } catch(err) {
+                        if (msgEl) msgEl.textContent = `✖ Error: ${err.message}`;
+                    }
+                });
+                container.appendChild(btn);
             });
         }
 
@@ -5566,8 +6298,41 @@ class UIManager {
         if (predefinedRelics && predefinedRelics.length > 0) {
             choices = predefinedRelics;
         } else {
-            // Fallback: Pick 3 random relics
-            const shuffled = [...this.relics].sort(() => 0.5 - Math.random());
+            // Fallback: Pick 3 random relics, respecting the 5-weapon limit
+            const ATTACK_RELIC_IDS = [
+                'pierce_shot',      // Plasma Orb
+                'multishot',        // Splitter Module
+                'drone',            // Support Drone
+                'missile',          // Missile Pod
+                'satellite_beam',
+                'singularity',
+                'cyber_mine',
+                'railgun',
+                'boomerang_blade',
+                'cyber_fangs'
+            ];
+
+            const ownedAttacks = new Set();
+            ownedAttacks.add('base');
+            if (this.game.acquiredRelics) {
+                this.game.acquiredRelics.forEach(r => {
+                    if (ATTACK_RELIC_IDS.includes(r.id)) {
+                        ownedAttacks.add(r.id);
+                    }
+                });
+            }
+
+            let pool = [...this.relics].filter(r => r.category !== 'none' && !r.disabled);
+            if (ownedAttacks.size >= 5) {
+                pool = pool.filter(r => {
+                    if (ATTACK_RELIC_IDS.includes(r.id)) {
+                        return ownedAttacks.has(r.id);
+                    }
+                    return true;
+                });
+            }
+
+            const shuffled = pool.sort(() => 0.5 - Math.random());
             choices = shuffled.slice(0, 3);
         }
 
@@ -5962,11 +6727,219 @@ class UIManager {
             ctx.lineTo(cx + 14, cy - 8);
             ctx.lineTo(cx + 10, cy - 12);
             ctx.stroke();
-        } else {
-            // Default Circle
+        } else if (id === 'volatile_core') {
+            // Volatile Core: Spiky ball
             ctx.beginPath();
-            ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+            for (let i = 0; i < 16; i++) {
+                const r = i % 2 === 0 ? 15 : 8;
+                const angle = (i / 16) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.closePath();
             ctx.fill();
+            // Core glow
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (id === 'soul_seekers') {
+            // Soul Seekers: Skull or Wisp
+            ctx.beginPath();
+            ctx.arc(cx, cy - 4, 8, 0, Math.PI * 2);
+            ctx.fill();
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(cx - 8, cy - 4);
+            ctx.quadraticCurveTo(cx - 5, cy + 10, cx, cy + 15);
+            ctx.quadraticCurveTo(cx + 5, cy + 10, cx + 8, cy - 4);
+            ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx - 3, cy - 4, 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + 3, cy - 4, 1.5, 0, Math.PI * 2); ctx.fill();
+        } else if (id === 'chain_lightning') {
+            // Chain Lightning: Lightning bolt
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx + 5, cy - 15);
+            ctx.lineTo(cx - 5, cy);
+            ctx.lineTo(cx + 3, cy);
+            ctx.lineTo(cx - 5, cy + 15);
+            ctx.stroke();
+            // Sparks
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(cx + 10, cy); ctx.lineTo(cx + 15, cy - 5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx - 15, cy + 5); ctx.stroke();
+        } else if (id === 'frost_aura') {
+            // Frost Aura: Snowflake
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * 14, cy + Math.sin(angle) * 14);
+                ctx.stroke();
+                // Spikes
+                const px = cx + Math.cos(angle) * 10;
+                const py = cy + Math.sin(angle) * 10;
+                const a1 = angle + Math.PI / 3;
+                const a2 = angle - Math.PI / 3;
+                ctx.beginPath();
+                ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a1) * 5, py + Math.sin(a1) * 5);
+                ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a2) * 5, py + Math.sin(a2) * 5);
+                ctx.stroke();
+            }
+        } else if (id === 'executioner') {
+            // Executioner: Axe
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 15);
+            ctx.lineTo(cx, cy + 15); // Handle
+            ctx.stroke();
+            // Blade
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 5);
+            ctx.quadraticCurveTo(cx + 12, cy - 10, cx + 15, cy - 5);
+            ctx.lineTo(cx + 15, cy + 5);
+            ctx.quadraticCurveTo(cx + 12, cy + 10, cx, cy + 5);
+            ctx.fill();
+        } else if (id === 'orbital_blades') {
+            // Orbital Blades: Orbiting circles/lines
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+            ctx.stroke();
+            // Blades
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx + Math.cos(angle) * 12, cy + Math.sin(angle) * 12, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (id === 'vampiric_aura') {
+            // Vampiric Aura: Swirl
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            // Spiral
+            ctx.beginPath();
+            for (let i = 0; i < 20; i++) {
+                const r = i / 2;
+                const angle = i / 2;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.stroke();
+        } else if (id === 'satellite_beam') {
+            // Satellite Beam: Circle with crosshair and lines from top
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - 15, cy); ctx.lineTo(cx + 15, cy);
+            ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy + 15);
+            ctx.stroke();
+            // Beam from top
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy - 10);
+            ctx.stroke();
+        } else if (id === 'singularity') {
+            // Singularity: Vortex/Spiral
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < 30; i++) {
+                const r = 15 - i * 0.5;
+                const angle = i * 0.5;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.stroke();
+        } else if (id === 'cyber_mine') {
+            // Cyber Mine: Circle with blinking light and spikes
+            ctx.beginPath();
+            ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // Spikes
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                const angle = (i / 4) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * 12, cy + Math.sin(angle) * 12);
+                ctx.lineTo(cx + Math.cos(angle) * 18, cy + Math.sin(angle) * 18);
+                ctx.stroke();
+            }
+        } else if (id === 'railgun') {
+            // Railgun: Long triangle/line with sparks
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 15, cy);
+            ctx.lineTo(cx + 15, cy);
+            ctx.stroke();
+            // Sparks
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx + 10, cy - 5); ctx.lineTo(cx + 15, cy - 10);
+            ctx.moveTo(cx + 10, cy + 5); ctx.lineTo(cx + 15, cy + 10);
+            ctx.stroke();
+        } else if (id === 'boomerang_blade') {
+            // Boomerang Blade: V-shape
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 12, cy - 8);
+            ctx.lineTo(cx, cy + 12);
+            ctx.lineTo(cx + 12, cy - 8);
+            ctx.stroke();
+        } else if (id === 'drone_swarm') {
+            // Drone Swarm: Multiple small triangles
+            ctx.fillStyle = color;
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                const dx = cx + Math.cos(angle) * 10;
+                const dy = cy + Math.sin(angle) * 10;
+                ctx.beginPath();
+                ctx.moveTo(dx, dy - 4);
+                ctx.lineTo(dx + 4, dy + 4);
+                ctx.lineTo(dx - 4, dy + 4);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else if (id === 'cyber_fangs') {
+            // Cyber Fangs: Multiple triangles pointing up
+            ctx.fillStyle = color;
+            for (let i = 0; i < 3; i++) {
+                const dx = cx - 10 + i * 10;
+                ctx.beginPath();
+                ctx.moveTo(dx, cy + 10);
+                ctx.lineTo(dx + 5, cy - 5);
+                ctx.lineTo(dx + 10, cy + 10);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else {
+            // Default: Cool Hexagon instead of boring circle
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * 15, cy + Math.sin(angle) * 15);
+            }
+            ctx.closePath();
+            ctx.fill();
+            // Inner pattern
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * 8, cy + Math.sin(angle) * 8);
+            }
+            ctx.closePath();
+            ctx.stroke();
         }
     }
 
@@ -7128,6 +8101,7 @@ class SkillTreeUI {
 
 
 
+
 class Game {
     constructor(canvas) {
         this.canvas = canvas;
@@ -7279,6 +8253,9 @@ class Game {
 
         // Re-apply upgrades (Base stats)
         this.upgradeSystem.applyUpgrades(this.player);
+        // Sync HP and Shield with upgraded Max values
+        this.player.hp = this.player.maxHp;
+        this.player.shield = this.player.maxShield || 0;
 
         if (preserveStats) {
             // Restore Relics FIRST to establish Max Stats correctly
@@ -7322,6 +8299,11 @@ class Game {
             console.log('DEBUG MODE ACTIVE: Super HP enabled!');
         }
 
+        // Reset Slo-Mo & Screen Shake parameters
+        this.timeScale = 1.0;
+        this.sloMoTimer = 0;
+        this.screenShakeIntensity = 0;
+        this.screenShakeDuration = 0;
 
         this.drops = [];
         this.enemyProjectiles = [];
@@ -7343,20 +8325,18 @@ class Game {
             }
         }
 
-        // Spawn Initial Chests (Scattered)
-        const rbg = ['red', 'blue', 'green'];
-        for (let i = rbg.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [rbg[i], rbg[j]] = [rbg[j], rbg[i]];
+        // Spawn Initial Chests (Scattered) - Exactly 2 Yellow chests per stage
+        const baseCategories = ['blue', 'green', 'red', 'yellow', 'yellow'];
+        const randomPool = ['blue', 'green', 'red'];
+        let chestCategories = [...baseCategories];
+        
+        // Add 2 random chests from Blue, Green, Red to make a total of 7 chests
+        for (let i = 0; i < 2; i++) {
+            const randomIndex = Math.floor(Math.random() * randomPool.length);
+            chestCategories.push(randomPool[randomIndex]);
         }
         
-        let chestCategories = [
-            'yellow', 'yellow',
-            rbg[0], 
-            rbg[1], rbg[1],
-            rbg[2], rbg[2]
-        ];
-        
+        // Shuffle the 7 categories
         for (let i = chestCategories.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [chestCategories[i], chestCategories[j]] = [chestCategories[j], chestCategories[i]];
@@ -7371,9 +8351,21 @@ class Game {
             const dx = x - this.player.x;
             const dy = y - this.player.y;
             if (dx * dx + dy * dy > 40000) {
-                const category = chestCategories[spawnedChests];
-                this.chests.push(new Chest(this, x, y, category));
-                spawnedChests++;
+                // Prevent spawning on top of obstacles
+                let overlaps = false;
+                for (const obs of this.obstacles) {
+                    const odx = x - obs.x;
+                    const ody = y - obs.y;
+                    if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) { // Obstacle radius (30) + Chest radius (20) + padding
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (!overlaps) {
+                    const category = chestCategories[spawnedChests];
+                    this.chests.push(new Chest(this, x, y, category));
+                    spawnedChests++;
+                }
             }
         }
 
@@ -7390,8 +8382,20 @@ class Game {
                 const dx = x - this.player.x;
                 const dy = y - this.player.y;
                 if (dx * dx + dy * dy > 40000) {
-                    this.chests.push(new Chest(this, x, y, 'orange'));
-                    orangeSpawned = true;
+                    // Prevent spawning on top of obstacles
+                    let overlaps = false;
+                    for (const obs of this.obstacles) {
+                        const odx = x - obs.x;
+                        const ody = y - obs.y;
+                        if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+                    if (!overlaps) {
+                        this.chests.push(new Chest(this, x, y, 'orange'));
+                        orangeSpawned = true;
+                    }
                 }
             }
         }
@@ -7413,13 +8417,51 @@ class Game {
     }
 
     update(dt) {
+        // Real-time timers (unscaled by slo-mo)
+        if (this.sloMoTimer && this.sloMoTimer > 0) {
+            this.sloMoTimer -= dt;
+            if (this.sloMoTimer <= 0) {
+                this.timeScale = 1.0;
+            }
+        }
+        if (this.screenShakeDuration > 0) {
+            this.screenShakeDuration -= dt;
+            if (this.screenShakeDuration <= 0) {
+                this.screenShakeIntensity = 0;
+            }
+        }
+
         if (this.state === 'skilltree') {
             if (this.skillTreeUI) this.skillTreeUI.update(dt);
             return;
         }
         if (this.state === 'reward') return; // Pause for reward selection
 
+        if (this.state === 'dying') {
+            this.deathTimer += dt;
+            
+            // Keep updating particles so they explode outwards beautifully!
+            this.particles.forEach(p => p.update(dt));
+            this.particles = this.particles.filter(p => p.life > 0);
+            
+            // Keep updating floating texts
+            this.floatingTexts.forEach(t => t.update(dt));
+            this.floatingTexts = this.floatingTexts.filter(t => t.life > 0);
+
+            // Camera stays on player position
+            if (this.player) {
+                this.updateCamera();
+            }
+
+            if (this.deathTimer >= 2.0) {
+                this.triggerGameOverScreen();
+            }
+            return;
+        }
+
         if (this.state === 'playing') {
+            // Scale dt for all gameplay updates inside this block to achieve slow-motion beautifully!
+            dt = dt * (this.timeScale || 1.0);
             if (this.player) {
                 this.player.update(dt);
                 this.updateCamera();
@@ -7441,8 +8483,11 @@ class Game {
             this.drops.forEach(d => d.update(dt));
             this.drops = this.drops.filter(d => !d.markedForDeletion);
 
-            this.enemyProjectiles.forEach(p => p.update(dt));
-            this.enemyProjectiles = this.enemyProjectiles.filter(p => !p.markedForDeletion);
+            // Update enemy projectiles (skip if time is stopped)
+            if (!(this.timeStopTimer && this.timeStopTimer > 0)) {
+                this.enemyProjectiles.forEach(p => p.update(dt));
+                this.enemyProjectiles = this.enemyProjectiles.filter(p => !p.markedForDeletion);
+            }
 
             this.chests.forEach(c => c.update(dt));
 
@@ -7453,7 +8498,15 @@ class Game {
             this.floatingTexts = this.floatingTexts.filter(t => !t.markedForDeletion);
 
             this.obstacles.forEach(o => o.update(dt));
-            this.drones.forEach(d => d.update(dt));
+            
+            this.drones.forEach(d => {
+                d.update(dt);
+                if (d.life !== undefined) {
+                    d.life -= dt;
+                    if (d.life <= 0) d.markedForDeletion = true;
+                }
+            });
+            this.drones = this.drones.filter(d => !d.markedForDeletion);
 
             // HP Regeneration (Nano Repair)
             if (this.player && this.player.hpRegen && this.player.hp < this.player.maxHp) {
@@ -7552,17 +8605,20 @@ class Game {
                 // Orange Items: On Player Hit
                 if (dmg > 0 && this.player.hp > 0) {
                     if (this.player.hasRevengeProtocol) {
+                        const sizeScale = this.player.projectileSize || 1;
+                        const radius = 150 * sizeScale;
+                        const dmg = Math.round(this.player.damage * 5.0);
                         this.waveManager.enemies.forEach(e => {
                             const edx = e.x - this.player.x;
                             const edy = e.y - this.player.y;
                             const edist = Math.sqrt(edx*edx + edy*edy);
-                            if (edist < 150) {
-                                e.takeDamage(50);
-                                this.showDamage(e.x, e.y, "50", '#ff6600');
+                            if (edist < radius) {
+                                e.takeDamage(dmg);
+                                this.showDamage(e.x, e.y, dmg.toString(), '#ff6600');
                                 // Lightning effect to each enemy
                                 for(let i=0; i<5; i++) {
                                     const p = new Particle(this, this.player.x + (e.x - this.player.x)*Math.random(), this.player.y + (e.y - this.player.y)*Math.random(), '#ffaa00');
-                                    p.size = 4;
+                                    p.size = 4 * sizeScale;
                                     this.particles.push(p);
                                 }
                             }
@@ -7570,9 +8626,9 @@ class Game {
                         // Big Shockwave
                         for(let i=0; i<30; i++) {
                             const p = new Particle(this, this.player.x, this.player.y, '#ff6600');
-                            p.size = 5;
-                            p.vx *= 3;
-                            p.vy *= 3;
+                            p.size = 5 * sizeScale;
+                            p.vx *= 3 * sizeScale;
+                            p.vy *= 3 * sizeScale;
                             this.particles.push(p);
                         }
                     }
@@ -7582,8 +8638,9 @@ class Game {
                             const edy = e.y - this.player.y;
                             const edist = Math.sqrt(edx*edx + edy*edy);
                             if (edist < 150 && edist > 0) {
-                                e.x += (edx/edist) * 100;
-                                e.y += (edy/edist) * 100;
+                                // Apply smooth knockback velocity
+                                e.knockbackX = (edx / edist) * 2000;
+                                e.knockbackY = (edy / edist) * 2000;
                             }
                         });
                         // Blue Repulsion Wave
@@ -7596,13 +8653,19 @@ class Game {
                         }
                     }
                     if (this.player.hasHoloDecoy) {
+                        this.player.decoys = this.player.decoys || [];
+                        this.player.decoys.push({
+                            x: this.player.x,
+                            y: this.player.y,
+                            lifeTime: 5.0
+                        });
                         for(let i=0; i<20; i++) {
                             const p = new Particle(this, this.player.x, this.player.y, '#00ffff');
                             p.size = 4;
                             p.vx *= 0.2; // Slow fading particles
                             p.vy *= 0.2;
-                            p.life = 2.0; // Last longer
-                            p.decay = 0.5;
+                            p.life = 1.0; 
+                            p.decay = 0.2; // Lasts exactly 5.0s (1.0 / 0.2)
                             this.particles.push(p);
                         }
                     }
@@ -7759,16 +8822,6 @@ class Game {
                             }
                         }
 
-                        // Vampire Fang: Chance-based life steal on hit
-                        if (this.player.lifeStealChance) {
-                            // Roll for heal chance
-                            const roll = Math.random();
-                            if (roll < this.player.lifeStealChance) {
-                                const healAmount = 1; // Always heal 1 HP on success
-                                this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmount);
-                                this.showDamage(this.player.x, this.player.y - 30, '+' + healAmount, '#00ff00');
-                            }
-                        }
 
                         // Legacy Flat Lifesteal (if still exists for compatibility)
                         if (this.player.lifeStealFlat) {
@@ -7845,6 +8898,51 @@ class Game {
     openChest(chest) {
         console.log("Chest Opened!");
         this.currentChest = chest; // Track this chest
+        
+        // Enforce the 5 attack method limit dynamically while keeping pre-rolled choices fixed!
+        const ATTACK_RELIC_IDS = [
+            'pierce_shot',      // Plasma Orb
+            'multishot',        // Splitter Module
+            'drone',            // Support Drone
+            'missile',          // Missile Pod
+            'satellite_beam',
+            'singularity',
+            'cyber_mine',
+            'railgun',
+            'boomerang_blade',
+            'cyber_fangs'
+        ];
+
+        const ownedAttacks = new Set();
+        ownedAttacks.add('base');
+        if (this.acquiredRelics) {
+            this.acquiredRelics.forEach(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    ownedAttacks.add(r.id);
+                }
+            });
+        }
+
+        // If player already has 5 or more attack types, replace any forbidden new yellow attacks in the chest
+        if (ownedAttacks.size >= 5) {
+            chest.contents = chest.contents.map(relic => {
+                if (ATTACK_RELIC_IDS.includes(relic.id) && !ownedAttacks.has(relic.id)) {
+                    // Find a random allowed replacement relic (MUST be an owned yellow attack to maintain category integrity)
+                    const allowedRelics = this.ui.relics.filter(r => {
+                        if (r.category === 'none' || r.disabled) return false;
+                        if (ATTACK_RELIC_IDS.includes(r.id)) {
+                            return ownedAttacks.has(r.id);
+                        }
+                        return false; // Do not allow other categories (Red, Blue, Green) to leak into Yellow weapon replacements!
+                    });
+                    if (allowedRelics.length > 0) {
+                        return { ...allowedRelics[Math.floor(Math.random() * allowedRelics.length)] };
+                    }
+                }
+                return relic;
+            });
+        }
+        
         this.audio.playLevelUp(); // Sound effect
         this.setState('reward');
         this.ui.showRewardSelection(chest.contents, chest.difficulty);
@@ -7895,7 +8993,7 @@ class Game {
         this.drops.push(new Drop(this, enemy.x, enemy.y, 'energy', dropValue));
         
         // Orange Item: Midas Touch
-        if (this.player.hasMidasTouch && Math.random() < 0.1) {
+        if (this.player.hasMidasTouch && Math.random() < 0.05) {
             this.drops.push(new Drop(this, enemy.x + 10, enemy.y + 10, 'energy', dropValue * 5));
             // Flashy Gold Particles
             for(let i=0; i<15; i++) {
@@ -7914,13 +9012,16 @@ class Game {
         
         // Orange Items: On Enemy Kill
         if (this.player.hasVolatileCore) {
+            const sizeScale = this.player.projectileSize || 1;
+            const radius = 100 * sizeScale;
+            const dmg = Math.round(this.player.damage * 3.0);
             this.waveManager.enemies.forEach(e => {
                 if (e === enemy || e.markedForDeletion) return;
                 const edx = e.x - enemy.x;
                 const edy = e.y - enemy.y;
-                if (edx*edx + edy*edy < 10000) { // 100px radius
-                    e.takeDamage(30);
-                    this.showDamage(e.x, e.y, "30", '#ff5500');
+                if (edx*edx + edy*edy < radius * radius) {
+                    e.takeDamage(dmg);
+                    this.showDamage(e.x, e.y, dmg.toString(), '#ff5500');
                     if (e.hp <= 0) this.processEnemyDeath(e);
                 }
             });
@@ -7929,24 +9030,41 @@ class Game {
                 const colors = ['#ff5500', '#ff0000', '#ffff00', '#ffffff'];
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 const p = new Particle(this, enemy.x, enemy.y, color);
-                p.size = Math.random() * 5 + 3;
-                p.vx *= 2.5;
-                p.vy *= 2.5;
+                p.size = (Math.random() * 5 + 3) * sizeScale;
+                p.vx *= 2.5 * sizeScale;
+                p.vy *= 2.5 * sizeScale;
                 this.particles.push(p);
             }
         }
         
         if (this.player.hasSoulSeekers) {
-            const target = this.player.findNearestEnemy();
-            if (target && !target.markedForDeletion) {
-                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target, 15));
-                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target, 15));
-                // Flashy Missile Spawn Particles
-                for(let i=0; i<20; i++) {
-                    const p = new Particle(this, enemy.x, enemy.y, '#ff8800');
-                    p.size = 3;
-                    this.particles.push(p);
+            // Find enemy closest to the DYING enemy (instead of player)
+            let target = null;
+            let minDist = Infinity;
+            this.waveManager.enemies.forEach(e => {
+                if (e === enemy || e.markedForDeletion) return;
+                const dx = e.x - enemy.x;
+                const dy = e.y - enemy.y;
+                const dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    target = e;
                 }
+            });
+
+            if (target) {
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target));
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target));
+            } else {
+                // If no target, create missiles that just fly up or random direction
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, { x: enemy.x, y: enemy.y - 100 }));
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, { x: enemy.x, y: enemy.y + 100 }));
+            }
+            // Flashy Missile Spawn Particles
+            for(let i=0; i<20; i++) {
+                const p = new Particle(this, enemy.x, enemy.y, '#ff8800');
+                p.size = 3;
+                this.particles.push(p);
             }
         }
 
@@ -7957,12 +9075,10 @@ class Game {
 
     addOrbitalBlades() {
         if (!this.player) return;
-        if (!this.player.orbitalBlades) {
-            this.player.orbitalBlades = [];
+        this.player.orbitalBlades = [];
+        for (let i = 0; i < 6; i++) {
+            this.player.orbitalBlades.push({ angle: (Math.PI * 2 / 6) * i });
         }
-        // Add 2 blades at a time
-        this.player.orbitalBlades.push({ angle: 0 });
-        this.player.orbitalBlades.push({ angle: Math.PI });
     }
 
     draw() {
@@ -7975,9 +9091,17 @@ class Game {
         this.ctx.fillStyle = '#101018';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        if (this.state === 'playing' || this.state === 'reward') {
+        if (this.state === 'playing' || this.state === 'reward' || this.state === 'dying') {
             this.ctx.save();
-            this.ctx.translate(-this.camera.x, -this.camera.y);
+            
+            // Apply Screen Shake if active
+            let shakeX = 0;
+            let shakeY = 0;
+            if (this.screenShakeDuration > 0) {
+                shakeX = (Math.random() - 0.5) * this.screenShakeIntensity;
+                shakeY = (Math.random() - 0.5) * this.screenShakeIntensity;
+            }
+            this.ctx.translate(-this.camera.x + shakeX, -this.camera.y + shakeY);
 
             this.drawBackground();
             this.drawGrid();
@@ -7990,7 +9114,8 @@ class Game {
             this.chests.forEach(c => c.draw(this.ctx));
             this.drops.forEach(d => d.draw(this.ctx));
 
-            if (this.player) this.player.draw(this.ctx);
+            // Draw player only if NOT in dying state (to look like they exploded completely!)
+            if (this.player && this.state !== 'dying') this.player.draw(this.ctx);
             if (this.waveManager) this.waveManager.draw(this.ctx);
 
             if (this.nextStageAltar) this.nextStageAltar.draw(this.ctx);
@@ -8024,6 +9149,15 @@ class Game {
                 if (this.nextStageAltar) {
                     this.drawDirectionalArrow(this.nextStageAltar.x, this.nextStageAltar.y, '#00ffff', 'EXIT');
                 }
+            }
+
+            // Dying Fade to Black Effect (Screen space overlay)
+            if (this.state === 'dying') {
+                const alpha = Math.min(1.0, this.deathTimer / 2.0); // Fades completely over 2.0s
+                this.ctx.save();
+                this.ctx.fillStyle = `rgba(16, 16, 24, ${alpha})`; // Blends beautifully to match the canvas clear color
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.restore();
             }
         } else {
             this.drawGrid(); // Static grid for menus
@@ -8356,10 +9490,44 @@ class Game {
 
     bossDefeated() {
         console.log("BOSS DEFEATED!");
-        this.audio.playLevelUp(); // Victory sound
+
+        // 1. Screen Shake (15px intensity for 1.2s)
+        this.screenShakeIntensity = 15;
+        this.screenShakeDuration = 1.2;
+
+        // 2. Slow Motion (Time Scale 0.15 for 2.0s of real time)
+        this.timeScale = 0.15;
+        this.sloMoTimer = 2.0;
+
+        // 3. Audio Explosion + Level Up Sound
+        if (this.audio) {
+            this.audio.playLevelUp();
+            this.audio._playOneShot('sawtooth', 400, 0.6, 1.5, 0.01, 30);
+            this.audio._playOneShot('triangle', 200, 0.6, 1.5, 0.01, 10);
+            this.audio._playOneShot('sine', 1000, 0.3, 0.8, 0.01, 200); // Dramatic synth slide
+        }
 
         // Stop Spawning
         this.waveManager.stopSpawning();
+
+        // 4. Find boss position and spawn MEGA particles explosion!
+        const boss = this.waveManager.enemies.find(e => e.isBoss) || { x: this.player.x, y: this.player.y - 150 };
+        const bx = boss.x;
+        const by = boss.y;
+
+        const bossColors = ['#ff00ff', '#ff5500', '#ffff00', '#00ffff', '#ffffff'];
+        for (let i = 0; i < 200; i++) {
+            const color = bossColors[Math.floor(Math.random() * bossColors.length)];
+            const p = new Particle(this, bx, by, color);
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 200 + Math.random() * 800;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+            p.size = Math.random() * 8 + 4; // Big chunks of boss debris!
+            p.life = 0.8 + Math.random() * 1.8;
+            p.maxLife = p.life;
+            this.particles.push(p);
+        }
 
         // Spawn Next Stage Altar at the location where the boss altar was
         const pos = this.waveManager.bossAltarPos;
@@ -8375,8 +9543,21 @@ class Game {
 
 
     getStageReward(stageNum) {
-        // Stage 1: 100, Stage 2: 150, Stage 3: 200, ...
-        return 100 + (stageNum - 1) * 50;
+        // Base Stage Reward: Stage 1: 100, Stage 2: 150, Stage 3: 200, ...
+        const base = 100 + (stageNum - 1) * 50;
+
+        // Difficulty Bonus Multiplier
+        let diffMultiplier = 1.0;
+        if (this.selectedDifficulty === 'hard') diffMultiplier = 1.5;
+        else if (this.selectedDifficulty === 'veryhard') diffMultiplier = 2.0;
+
+        // Skill Tree (Lucky Coin) Bonus
+        let skillBonus = 1.0;
+        if (this.player && this.player.moneyBonus) {
+            skillBonus = this.player.moneyBonus;
+        }
+
+        return Math.floor(base * diffMultiplier * skillBonus);
     }
 
     nextStage() {
@@ -8446,6 +9627,8 @@ class Game {
         this.setState('victory');
         document.getElementById('victory-ene').innerText = this.totalEneCollected;
         document.getElementById('victory-money').innerText = this.runMoney;
+        const vicRunMoney = document.getElementById('victory-run-money');
+        if (vicRunMoney) vicRunMoney.innerText = this.runMoney;
         document.getElementById('victory-dmg-dealt').innerText = Math.round(this.totalDamageDealt || 0);
         document.getElementById('victory-dmg-taken').innerText = Math.round(this.totalDamageTaken || 0);
 
@@ -8601,6 +9784,35 @@ class Game {
             return; // Don't actually game over
         }
 
+        // --- NEW DEATH PERFORMANCE STATE ---
+        if (this.state !== 'dying') {
+            this.state = 'dying';
+            this.deathTimer = 0;
+
+            // Dramatic exploding sawtooth & triangle SFX
+            if (this.audio) {
+                this.audio._playOneShot('sawtooth', 300, 0.4, 1.2, 0.01, 40);
+                this.audio._playOneShot('triangle', 150, 0.4, 1.2, 0.01, 20);
+            }
+
+            // Cyber exploding particles
+            const particleColors = ['#ff00ff', '#00ffff', '#ffff00', '#ffffff'];
+            for (let i = 0; i < 150; i++) {
+                const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+                const p = new Particle(this, this.player.x, this.player.y, color);
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 150 + Math.random() * 600;
+                p.vx = Math.cos(angle) * speed;
+                p.vy = Math.sin(angle) * speed;
+                p.life = 0.5 + Math.random() * 1.5;
+                p.maxLife = p.life;
+                p.size = Math.random() * 5 + 3;
+                this.particles.push(p);
+            }
+        }
+    }
+
+    triggerGameOverScreen() {
         // ステージクリア失敗時の報酬を計算
         const stageReward = this.getStageReward(this.mapLevel);
         const failRate = (this.mapLevel === 1) ? 0.1 : 0.5;
@@ -8613,8 +9825,10 @@ class Game {
 
         this.setState('gameover');
         this.ui.updateGameOverStats(this.totalEneCollected, this.killCount, this.acquiredRelics, this.mapLevel, this.loopCount, this.runMoney);
-        document.getElementById('go-dmg-dealt').innerText = Math.round(this.totalDamageDealt || 0);
-        document.getElementById('go-dmg-taken').innerText = Math.round(this.totalDamageTaken || 0);
+        const elDealt = document.getElementById('go-dmg-dealt');
+        if (elDealt) elDealt.innerText = Math.round(this.totalDamageDealt || 0);
+        const elTaken = document.getElementById('go-dmg-taken');
+        if (elTaken) elTaken.innerText = Math.round(this.totalDamageTaken || 0);
         // Reset map level on game over
         this.mapLevel = 1;
     }

@@ -62,7 +62,7 @@ export class SkillTree {
         // Advanced Nodes (Attached to the ends of chains)
         this.nodes['multi1'] = { id: 'multi1', name: 'Splitter Module', desc: 'Shoot +1 Bullet', cost: 3000, x: this.nodes[lastAtk].x + 80, y: this.nodes[lastAtk].y, requires: [lastAtk], effect: (p) => p.multiShotCount = (p.multiShotCount || 1) + 1, color: '#ff00aa' };
         this.nodes['pierce1'] = { id: 'pierce1', name: 'Plasma Orb', desc: 'Pierce +1', cost: 3000, x: this.nodes[lastRate].x + 60, y: this.nodes[lastRate].y - 60, requires: [lastRate], effect: (p) => p.pierceShotCount = (p.pierceShotCount || 0) + 1, color: '#00ccff' };
-        this.nodes['lifesteal1'] = { id: 'lifesteal1', name: 'Vampire Protocol', desc: '10% chance to heal on hit', cost: 3000, x: this.nodes[lastRegen].x - 60, y: this.nodes[lastRegen].y + 60, requires: [lastRegen], effect: (p) => p.lifeStealChance = (p.lifeStealChance || 0) + 0.1, color: '#cc0044' };
+        this.nodes['lifesteal1'] = { id: 'lifesteal1', name: 'Vampire Protocol', desc: '5% chance to heal 1 HP on hit (Max 50/s)', cost: 3000, x: this.nodes[lastRegen].x - 60, y: this.nodes[lastRegen].y + 60, requires: [lastRegen], effect: (p) => p.lifeStealChance = (p.lifeStealChance || 0) + 0.05, color: '#cc0044' };
     }
 
     reset() {

@@ -12,85 +12,93 @@ export class UIManager {
             // 4-Tier Stat Boosts
             // ----------------------------------------------------
             // 1. Attack Damage
-            { id: 'atk_up_1', name: 'Cyber Katana (C)', desc: 'Attack Damage +10%', cost: 12, rarity: 'common', color: '#ff4444', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => p.damage *= 1.10 },
-            { id: 'atk_up_2', name: 'Cyber Katana (R)', desc: 'Attack Damage +15%', cost: 18, rarity: 'rare', color: '#ff4444', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => p.damage *= 1.15 },
-            { id: 'atk_up_3', name: 'Cyber Katana (E)', desc: 'Attack Damage +20%', cost: 26, rarity: 'epic', color: '#ff4444', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => p.damage *= 1.20 },
-            { id: 'atk_up_4', name: 'Cyber Katana (L)', desc: 'Attack Damage +25%', cost: 40, rarity: 'legendary', color: '#ff4444', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => p.damage *= 1.25 },
+            { id: 'atk_up_1', name: 'Cyber Katana (C)', desc: 'Attack Damage +10%', cost: 12, rarity: 'common', color: '#ff4444', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => p.damage *= 1.10 },
+            { id: 'atk_up_2', name: 'Cyber Katana (R)', desc: 'Attack Damage +15%', cost: 18, rarity: 'rare', color: '#ff4444', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => p.damage *= 1.15 },
+            { id: 'atk_up_3', name: 'Cyber Katana (E)', desc: 'Attack Damage +20%', cost: 26, rarity: 'epic', color: '#ff4444', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => p.damage *= 1.20 },
+            { id: 'atk_up_4', name: 'Cyber Katana (L)', desc: 'Attack Damage +25%', cost: 40, rarity: 'legendary', color: '#ff4444', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => p.damage *= 1.25 },
 
             // 2. Move Speed
-            { id: 'spd_up_1', name: 'Neko Headphones (C)', desc: 'Move Speed +10%', cost: 12, rarity: 'common', color: '#4444ff', rarityBorder: '#888888', weight: 10, category: 'blue', effect: (p) => p.speed *= 1.10 },
-            { id: 'spd_up_2', name: 'Neko Headphones (R)', desc: 'Move Speed +15%', cost: 18, rarity: 'rare', color: '#4444ff', rarityBorder: '#4466ff', weight: 5, category: 'blue', effect: (p) => p.speed *= 1.15 },
-            { id: 'spd_up_3', name: 'Neko Headphones (E)', desc: 'Move Speed +20%', cost: 26, rarity: 'epic', color: '#4444ff', rarityBorder: '#aa00ff', weight: 2, category: 'blue', effect: (p) => p.speed *= 1.20 },
-            { id: 'spd_up_4', name: 'Neko Headphones (L)', desc: 'Move Speed +25%', cost: 40, rarity: 'legendary', color: '#4444ff', rarityBorder: '#ff8800', weight: 1, category: 'blue', effect: (p) => p.speed *= 1.25 },
+            { id: 'spd_up_1', name: 'Neko Headphones (C)', desc: 'Move Speed +3%', cost: 12, rarity: 'common', color: '#4444ff', rarityBorder: '#888888', weight: 58, category: 'blue', effect: (p) => p.speed *= 1.03 },
+            { id: 'spd_up_2', name: 'Neko Headphones (R)', desc: 'Move Speed +5%', cost: 18, rarity: 'rare', color: '#4444ff', rarityBorder: '#4466ff', weight: 35, category: 'blue', effect: (p) => p.speed *= 1.05 },
+            { id: 'spd_up_3', name: 'Neko Headphones (E)', desc: 'Move Speed +10%', cost: 26, rarity: 'epic', color: '#4444ff', rarityBorder: '#aa00ff', weight: 5, category: 'blue', effect: (p) => p.speed *= 1.10 },
+            { id: 'spd_up_4', name: 'Neko Headphones (L)', desc: 'Move Speed +15%', cost: 40, rarity: 'legendary', color: '#4444ff', rarityBorder: '#ff8800', weight: 2, category: 'blue', effect: (p) => p.speed *= 1.15 },
 
             // 3. Max HP
-            { id: 'hp_up_1', name: 'Energy Drink (C)', desc: 'Max HP +30', cost: 12, rarity: 'common', color: '#44ff44', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { p.maxHp += 30; p.hp += 30; } },
-            { id: 'hp_up_2', name: 'Energy Drink (R)', desc: 'Max HP +50', cost: 18, rarity: 'rare', color: '#44ff44', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { p.maxHp += 50; p.hp += 50; } },
-            { id: 'hp_up_3', name: 'Energy Drink (E)', desc: 'Max HP +80', cost: 26, rarity: 'epic', color: '#44ff44', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { p.maxHp += 80; p.hp += 80; } },
-            { id: 'hp_up_4', name: 'Energy Drink (L)', desc: 'Max HP +120', cost: 40, rarity: 'legendary', color: '#44ff44', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { p.maxHp += 120; p.hp += 120; } },
+            { id: 'hp_up_1', name: 'Energy Drink (C)', desc: 'Max HP +30', cost: 12, rarity: 'common', color: '#44ff44', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { p.maxHp += 30; p.hp += 30; } },
+            { id: 'hp_up_2', name: 'Energy Drink (R)', desc: 'Max HP +50', cost: 18, rarity: 'rare', color: '#44ff44', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { p.maxHp += 50; p.hp += 50; } },
+            { id: 'hp_up_3', name: 'Energy Drink (E)', desc: 'Max HP +80', cost: 26, rarity: 'epic', color: '#44ff44', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { p.maxHp += 80; p.hp += 80; } },
+            { id: 'hp_up_4', name: 'Energy Drink (L)', desc: 'Max HP +120', cost: 40, rarity: 'legendary', color: '#44ff44', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { p.maxHp += 120; p.hp += 120; } },
 
             // 4. Fire Rate (Lower interval is better)
-            { id: 'rate_up_1', name: 'Overclock Chip (C)', desc: 'Fire Rate +10%', cost: 12, rarity: 'common', color: '#ffaa00', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => p.shootInterval *= 0.90 },
-            { id: 'rate_up_2', name: 'Overclock Chip (R)', desc: 'Fire Rate +15%', cost: 18, rarity: 'rare', color: '#ffaa00', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => p.shootInterval *= 0.85 },
-            { id: 'rate_up_3', name: 'Overclock Chip (E)', desc: 'Fire Rate +20%', cost: 26, rarity: 'epic', color: '#ffaa00', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => p.shootInterval *= 0.80 },
-            { id: 'rate_up_4', name: 'Overclock Chip (L)', desc: 'Fire Rate +25%', cost: 40, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => p.shootInterval *= 0.75 },
+            { id: 'rate_up_1', name: 'Overclock Chip (C)', desc: 'Fire Rate +5%', cost: 12, rarity: 'common', color: '#ffaa00', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => p.shootInterval *= 0.95 },
+            { id: 'rate_up_2', name: 'Overclock Chip (R)', desc: 'Fire Rate +10%', cost: 18, rarity: 'rare', color: '#ffaa00', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => p.shootInterval *= 0.90 },
+            { id: 'rate_up_3', name: 'Overclock Chip (E)', desc: 'Fire Rate +15%', cost: 26, rarity: 'epic', color: '#ffaa00', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => p.shootInterval *= 0.85 },
+            { id: 'rate_up_4', name: 'Overclock Chip (L)', desc: 'Fire Rate +20%', cost: 40, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => p.shootInterval *= 0.80 },
 
             // 5. HP Regen
-            { id: 'hp_regen_1', name: 'Nano Repair (C)', desc: 'HP Regen +0.5/sec', cost: 12, rarity: 'common', color: '#44ff88', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 0.5; } },
-            { id: 'hp_regen_2', name: 'Nano Repair (R)', desc: 'HP Regen +1.0/sec', cost: 18, rarity: 'rare', color: '#44ff88', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.0; } },
-            { id: 'hp_regen_3', name: 'Nano Repair (E)', desc: 'HP Regen +1.5/sec', cost: 26, rarity: 'epic', color: '#44ff88', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.5; } },
-            { id: 'hp_regen_4', name: 'Nano Repair (L)', desc: 'HP Regen +2.0/sec', cost: 40, rarity: 'legendary', color: '#44ff88', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 2.0; } },
+            { id: 'hp_regen_1', name: 'Nano Repair (C)', desc: 'HP Regen +0.5/sec', cost: 12, rarity: 'common', color: '#44ff88', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 0.5; } },
+            { id: 'hp_regen_2', name: 'Nano Repair (R)', desc: 'HP Regen +1.0/sec', cost: 18, rarity: 'rare', color: '#44ff88', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.0; } },
+            { id: 'hp_regen_3', name: 'Nano Repair (E)', desc: 'HP Regen +1.5/sec', cost: 26, rarity: 'epic', color: '#44ff88', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 1.5; } },
+            { id: 'hp_regen_4', name: 'Nano Repair (L)', desc: 'HP Regen +2.0/sec', cost: 40, rarity: 'legendary', color: '#44ff88', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.hpRegen) p.hpRegen = 0; p.hpRegen += 2.0; } },
 
             // 6. Crit Chance
-            { id: 'crit_chance_1', name: 'Lucky Dice (C)', desc: 'Crit Chance +5%', cost: 12, rarity: 'common', color: '#ffdd00', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.05; } },
-            { id: 'crit_chance_2', name: 'Lucky Dice (R)', desc: 'Crit Chance +10%', cost: 18, rarity: 'rare', color: '#ffdd00', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.10; } },
-            { id: 'crit_chance_3', name: 'Lucky Dice (E)', desc: 'Crit Chance +15%', cost: 26, rarity: 'epic', color: '#ffdd00', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.15; } },
-            { id: 'crit_chance_4', name: 'Lucky Dice (L)', desc: 'Crit Chance +20%', cost: 40, rarity: 'legendary', color: '#ffdd00', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.20; } },
+            { id: 'crit_chance_1', name: 'Lucky Dice (C)', desc: 'Crit Chance +5%', cost: 12, rarity: 'common', color: '#ffdd00', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.05; } },
+            { id: 'crit_chance_2', name: 'Lucky Dice (R)', desc: 'Crit Chance +10%', cost: 18, rarity: 'rare', color: '#ffdd00', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.10; } },
+            { id: 'crit_chance_3', name: 'Lucky Dice (E)', desc: 'Crit Chance +15%', cost: 26, rarity: 'epic', color: '#ffdd00', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.15; } },
+            { id: 'crit_chance_4', name: 'Lucky Dice (L)', desc: 'Crit Chance +20%', cost: 40, rarity: 'legendary', color: '#ffdd00', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => { if (!p.critChance) p.critChance = 0; p.critChance += 0.20; } },
 
             // 7. Projectile Size
-            { id: 'projectile_size_1', name: 'Amplifier Core (C)', desc: 'Proj Size +15%', cost: 12, rarity: 'common', color: '#ff6600', rarityBorder: '#888888', weight: 10, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.15; } },
-            { id: 'projectile_size_2', name: 'Amplifier Core (R)', desc: 'Proj Size +30%', cost: 18, rarity: 'rare', color: '#ff6600', rarityBorder: '#4466ff', weight: 5, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.30; } },
-            { id: 'projectile_size_3', name: 'Amplifier Core (E)', desc: 'Proj Size +45%', cost: 26, rarity: 'epic', color: '#ff6600', rarityBorder: '#aa00ff', weight: 2, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.45; } },
-            { id: 'projectile_size_4', name: 'Amplifier Core (L)', desc: 'Proj Size +60%', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 1, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.60; } },
+            { id: 'projectile_size_1', name: 'Amplifier Core (C)', desc: 'Proj Size +10%', cost: 12, rarity: 'common', color: '#ff6600', rarityBorder: '#888888', weight: 58, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.10; } },
+            { id: 'projectile_size_2', name: 'Amplifier Core (R)', desc: 'Proj Size +15%', cost: 18, rarity: 'rare', color: '#ff6600', rarityBorder: '#4466ff', weight: 35, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.15; } },
+            { id: 'projectile_size_3', name: 'Amplifier Core (E)', desc: 'Proj Size +20%', cost: 26, rarity: 'epic', color: '#ff6600', rarityBorder: '#aa00ff', weight: 5, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.20; } },
+            { id: 'projectile_size_4', name: 'Amplifier Core (L)', desc: 'Proj Size +25%', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 2, category: 'red', effect: (p) => { if (!p.projectileSize) p.projectileSize = 1; p.projectileSize *= 1.25; } },
 
             // 8. Damage Reduction (Armor)
-            { id: 'armor_plate_1', name: 'Titanium Plating (C)', desc: 'Dmg Taken -10%', cost: 12, rarity: 'common', color: '#999999', rarityBorder: '#888888', weight: 10, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.90; } },
-            { id: 'armor_plate_2', name: 'Titanium Plating (R)', desc: 'Dmg Taken -15%', cost: 18, rarity: 'rare', color: '#999999', rarityBorder: '#4466ff', weight: 5, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.85; } },
-            { id: 'armor_plate_3', name: 'Titanium Plating (E)', desc: 'Dmg Taken -20%', cost: 26, rarity: 'epic', color: '#999999', rarityBorder: '#aa00ff', weight: 2, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.80; } },
-            { id: 'armor_plate_4', name: 'Titanium Plating (L)', desc: 'Dmg Taken -25%', cost: 40, rarity: 'legendary', color: '#999999', rarityBorder: '#ff8800', weight: 1, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.75; } },
+            { id: 'armor_plate_1', name: 'Titanium Plating (C)', desc: 'Dmg Taken -10%', cost: 12, rarity: 'common', color: '#999999', rarityBorder: '#888888', weight: 58, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.90; } },
+            { id: 'armor_plate_2', name: 'Titanium Plating (R)', desc: 'Dmg Taken -15%', cost: 18, rarity: 'rare', color: '#999999', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.85; } },
+            { id: 'armor_plate_3', name: 'Titanium Plating (E)', desc: 'Dmg Taken -20%', cost: 26, rarity: 'epic', color: '#999999', rarityBorder: '#aa00ff', weight: 5, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.80; } },
+            { id: 'armor_plate_4', name: 'Titanium Plating (L)', desc: 'Dmg Taken -25%', cost: 40, rarity: 'legendary', color: '#999999', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.damageMultiplier) p.damageMultiplier = 1.0; p.damageMultiplier *= 0.75; } },
 
             // ----------------------------------------------------
             // Unique / Utility / Method items (Kept from original)
             // ----------------------------------------------------
-            { id: 'pierce_shot', name: 'Plasma Orb', desc: 'Fire penetrating orbs +1', cost: 28, rarity: 'rare', color: '#00aaff', rarityBorder: '#4466ff', weight: 7, category: 'yellow', effect: (p) => { if (!p.pierceShotCount) p.pierceShotCount = 0; p.pierceShotCount++; } },
-            { id: 'range_up', name: 'Scope Lens', desc: 'Magnet Range +50%', cost: 10, rarity: 'rare', color: '#00ffff', rarityBorder: '#4466ff', weight: 7, category: 'blue', effect: (p) => { /* Handled in Drop */ } },
-            { id: 'shield_gen', name: 'Energy Barrier', desc: 'Shield absorbs 20 damage', cost: 28, rarity: 'rare', color: '#8888ff', rarityBorder: '#4466ff', weight: 7, category: 'green', effect: (p) => { if (!p.shield) p.shield = 0; p.shield += 20; if (!p.maxShield) p.maxShield = 0; p.maxShield += 20; } },
-            { id: 'multishot', name: 'Splitter Module', desc: 'Shoot 2 extra bullets', cost: 32, rarity: 'rare', color: '#ff4488', rarityBorder: '#4466ff', weight: 7, category: 'yellow', effect: (p) => { if (!p.multiShotCount) p.multiShotCount = 1; p.multiShotCount += 1; } },
+            { id: 'pierce_shot', name: 'Plasma Orb', desc: 'Fire penetrating orbs +1', cost: 28, rarity: 'legendary', color: '#00aaff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { if (!p.pierceShotCount) p.pierceShotCount = 0; p.pierceShotCount++; } },
+            { id: 'range_up', name: 'Scope Lens', desc: 'Magnet Range +50%', cost: 10, rarity: 'rare', color: '#00ffff', rarityBorder: '#4466ff', weight: 35, category: 'blue', effect: (p) => { /* Handled in Drop */ } },
+            { id: 'shield_gen', name: 'Energy Barrier', desc: 'Shield absorbs 20 damage', cost: 28, rarity: 'rare', color: '#8888ff', rarityBorder: '#4466ff', weight: 35, category: 'green', effect: (p) => { if (!p.shield) p.shield = 0; p.shield += 20; if (!p.maxShield) p.maxShield = 0; p.maxShield += 20; } },
+            { id: 'multishot', name: 'Splitter Module', desc: 'Shoot 2 extra bullets', cost: 32, rarity: 'legendary', color: '#ff4488', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { if (!p.multiShotCount) p.multiShotCount = 1; p.multiShotCount += 1; } },
 
             // Epic (エピック) - 強力な強化
-            { id: 'drone', name: 'Support Drone', desc: 'Summons a drone', cost: 32, rarity: 'epic', color: '#00ffaa', rarityBorder: '#aa00ff', weight: 4, category: 'yellow', effect: (p) => p.game.addDrone() },
-            { id: 'lifesteal', name: 'Vampire Fang', desc: '20% chance to heal +1 HP on hit', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#aa00ff', weight: 4, category: 'green', effect: (p) => { if (!p.lifeStealChance) p.lifeStealChance = 0.20; else p.lifeStealChance *= 1.5; } },
-            { id: 'time_warp', name: 'Chrono Lens', desc: 'Speed +20%, Fire Rate +15%', cost: 44, rarity: 'epic', color: '#00ccff', rarityBorder: '#aa00ff', weight: 4, category: 'blue', effect: (p) => { p.speed *= 1.2; p.shootInterval *= 0.85; } },
-            { id: 'missile', name: 'Missile Pod', desc: 'Fires homing missiles', cost: 40, rarity: 'epic', color: '#ff0088', rarityBorder: '#aa00ff', weight: 4, category: 'yellow', effect: (p) => p.missileCount++ },
+            { id: 'drone', name: 'Support Drone', desc: 'Summons a drone', cost: 32, rarity: 'legendary', color: '#00ffaa', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => p.game.addDrone() },
+            { id: 'lifesteal', name: 'Vampire Fang', desc: '20% chance to heal +1 HP on hit', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#aa00ff', weight: 5, category: 'green', disabled: true, effect: (p) => { if (!p.lifeStealChance) p.lifeStealChance = 0.20; else p.lifeStealChance *= 1.5; } },
+            { id: 'time_warp', name: 'Chrono Lens', desc: 'Speed +5%, Fire Rate +10%', cost: 44, rarity: 'epic', color: '#00ccff', rarityBorder: '#aa00ff', weight: 5, category: 'blue', effect: (p) => { p.speed *= 1.05; p.shootInterval *= 0.90; } },
+            { id: 'missile', name: 'Missile Pod', desc: 'Fires homing missiles', cost: 40, rarity: 'legendary', color: '#ff0088', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => p.missileCount++ },
 
             // Legendary (レジェンダリー) - 超強力
             { id: 'phoenix_heart', name: 'Phoenix Heart', desc: 'Revive once on death', cost: 64, rarity: 'legendary', color: '#ffaa00', rarityBorder: '#ff8800', weight: 2, category: 'green', effect: (p) => { if (!p.reviveCount) p.reviveCount = 0; p.reviveCount++; } },
             { id: 'phoenix_heart_used', name: 'Phoenix Heart (Used)', desc: 'Already consumed', cost: 0, rarity: 'legendary', color: '#666666', rarityBorder: '#444444', weight: 0, category: 'none', effect: (p) => { /* No effect */ } },
             
             // Special Effects (オレンジ - 特殊効果)
-            { id: 'volatile_core', name: 'Volatile Core', desc: 'Explosion on enemy kill', cost: 45, rarity: 'epic', color: '#ff5500', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasVolatileCore = true },
-            { id: 'soul_seekers', name: 'Soul Seekers', desc: 'Fires missiles on enemy kill', cost: 50, rarity: 'epic', color: '#ff8800', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasSoulSeekers = true },
-            { id: 'revenge_protocol', name: 'Revenge Protocol', desc: 'Counter shockwave when hit', cost: 40, rarity: 'epic', color: '#ff6600', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasRevengeProtocol = true },
-            { id: 'chain_lightning', name: 'Chain Lightning', desc: 'Attacks can chain to nearby enemies', cost: 55, rarity: 'legendary', color: '#ffee00', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasChainLightning = true },
-            { id: 'frost_aura', name: 'Frost Aura', desc: 'Slows down nearby enemies', cost: 45, rarity: 'epic', color: '#00ccff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasFrostAura = true },
-            { id: 'executioner', name: 'Executioner', desc: 'Double damage to low HP enemies', cost: 40, rarity: 'epic', color: '#cc0044', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasExecutioner = true },
-            { id: 'repulsion_shield', name: 'Repulsion Shield', desc: 'Knockback enemies when hit', cost: 35, rarity: 'epic', color: '#aaaaff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasRepulsionShield = true },
-            { id: 'midas_touch', name: 'Midas Touch', desc: 'Extra Ene drop on kill', cost: 50, rarity: 'legendary', color: '#ffd700', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasMidasTouch = true },
-            { id: 'adrenaline', name: 'Adrenaline', desc: 'Extreme speed/fire rate at low HP', cost: 40, rarity: 'epic', color: '#ff2222', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasAdrenaline = true },
-            { id: 'orbital_blades', name: 'Orbital Blades', desc: 'Spinning blades damage nearby enemies', cost: 55, rarity: 'legendary', color: '#dddddd', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.game.addOrbitalBlades() },
-            { id: 'time_stop', name: 'Time Stop', desc: 'Stop time when picking up potion', cost: 50, rarity: 'legendary', color: '#aa00ff', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasTimeStop = true },
-            { id: 'holo_decoy', name: 'Holo Decoy', desc: 'Leave a decoy when taking damage', cost: 40, rarity: 'epic', color: '#00ffff', rarityBorder: '#ffaa00', weight: 3, category: 'orange', effect: (p) => p.hasHoloDecoy = true },
-            { id: 'vampiric_aura', name: 'Vampiric Aura', desc: 'Drain HP from nearby enemies', cost: 60, rarity: 'legendary', color: '#990033', rarityBorder: '#ffaa00', weight: 2, category: 'orange', effect: (p) => p.hasVampiricAura = true }
+            { id: 'volatile_core', name: 'Volatile Core', desc: 'Explosion on enemy kill', cost: 45, rarity: 'legendary', color: '#ff5500', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasVolatileCore = true },
+            { id: 'soul_seekers', name: 'Soul Seekers', desc: 'Fires missiles on enemy kill', cost: 50, rarity: 'legendary', color: '#ff8800', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasSoulSeekers = true },
+            { id: 'revenge_protocol', name: 'Revenge Protocol', desc: 'Counter shockwave when hit', cost: 40, rarity: 'legendary', color: '#ff6600', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasRevengeProtocol = true },
+            { id: 'chain_lightning', name: 'Chain Lightning', desc: 'Attacks can chain to nearby enemies', cost: 55, rarity: 'legendary', color: '#ffee00', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasChainLightning = true },
+            { id: 'frost_aura', name: 'Frost Aura', desc: 'Slows down nearby enemies', cost: 45, rarity: 'legendary', color: '#00ccff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasFrostAura = true },
+            { id: 'executioner', name: 'Executioner', desc: 'Double damage to low HP enemies', cost: 40, rarity: 'legendary', color: '#cc0044', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasExecutioner = true },
+            { id: 'repulsion_shield', name: 'Repulsion Shield', desc: 'Knockback enemies when hit', cost: 35, rarity: 'legendary', color: '#aaaaff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasRepulsionShield = true },
+            { id: 'midas_touch', name: 'Midas Touch', desc: 'Extra Ene drop on kill', cost: 50, rarity: 'legendary', color: '#ffd700', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasMidasTouch = true },
+            { id: 'adrenaline', name: 'Adrenaline', desc: 'Extreme speed/fire rate at low HP', cost: 40, rarity: 'legendary', color: '#ff2222', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasAdrenaline = true },
+            { id: 'orbital_blades', name: 'Orbital Blades', desc: 'Spinning blades damage nearby enemies', cost: 55, rarity: 'legendary', color: '#dddddd', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.game.addOrbitalBlades() },
+            { id: 'time_stop', name: 'Time Stop', desc: 'Stop time when picking up potion', cost: 50, rarity: 'legendary', color: '#aa00ff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasTimeStop = true },
+            { id: 'holo_decoy', name: 'Holo Decoy', desc: 'Leave a decoy when taking damage', cost: 40, rarity: 'legendary', color: '#00ffff', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasHoloDecoy = true },
+            { id: 'vampiric_aura', name: 'Vampiric Aura', desc: 'Drain HP from nearby enemies', cost: 60, rarity: 'legendary', color: '#990033', rarityBorder: '#ff8800', weight: 2, category: 'orange', effect: (p) => p.hasVampiricAura = true },
+            
+            // New Weapons (Yellow Category)
+            { id: 'satellite_beam', name: 'Satellite Beam', desc: 'Fire massive beam from sky (+1 target)', cost: 45, rarity: 'legendary', color: '#ff00ff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.satelliteBeamCount = (p.satelliteBeamCount || 0) + 1; } },
+            { id: 'singularity', name: 'Singularity', desc: 'Create black holes that pull enemies (+1)', cost: 50, rarity: 'legendary', color: '#5500aa', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.singularityCount = (p.singularityCount || 0) + 1; } },
+            { id: 'cyber_mine', name: 'Cyber Mine', desc: 'Drop mines behind you (+1)', cost: 35, rarity: 'legendary', color: '#ffcc00', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.cyberMineCount = (p.cyberMineCount || 0) + 1; } },
+            { id: 'railgun', name: 'Railgun', desc: 'Powerful piercing laser (+1 beam)', cost: 45, rarity: 'legendary', color: '#00ffff', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.railgunCount = (p.railgunCount || 0) + 1; } },
+            { id: 'boomerang_blade', name: 'Boomerang Blade', desc: 'Throws returning blades (+1)', cost: 40, rarity: 'legendary', color: '#00ff55', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.boomerangCount = (p.boomerangCount || 0) + 1; } },
+            { id: 'cyber_fangs', name: 'Cyber Fangs', desc: 'Spikes from ground on enemies (+3 targets)', cost: 40, rarity: 'legendary', color: '#ff0055', rarityBorder: '#ff8800', weight: 2, category: 'yellow', effect: (p) => { p.cyberFangsCount = (p.cyberFangsCount || 0) + 1; } }
         ];
 
         this.setupScreens();
@@ -102,19 +110,21 @@ export class UIManager {
         this.screens.title = this.createScreen('title-screen', `
             <h1 class="title-text">Cyber<br>Survivor</h1>
             <button id="btn-start" class="cyber-btn">START</button>
-            <button id="btn-options" class="cyber-btn secondary" style="display:none;">OPTIONS</button>
+            <!-- Hide OPTIONS button but keep for future restoration -->
+            <button id="btn-options" class="cyber-btn secondary" style="display: none;">OPTIONS</button>
             <button id="btn-reset" class="cyber-btn secondary" style="margin-top: 20px; background: #ff4444;">RESET DATA</button>
         `);
 
         // Options Screen
         this.screens.options = this.createScreen('options-screen', `
             <h2>OPTIONS</h2>
-            <div class="options-container">
+            <div class="options-container scrollable" style="max-height: 75vh; overflow-y: auto; width: 90%; max-width: 500px;">
                 <label class="cyber-checkbox">
                     <input type="checkbox" id="chk-debug">
                     <span class="checkmark"></span>
                     DEBUG MODE (x100 Ene)
                 </label>
+                <button id="btn-debug-money" class="cyber-btn small" style="margin-top: 10px; width: 100%; color: #ffd700; border-color: #ffd700; font-weight: bold; background: rgba(255, 215, 0, 0.1);">💰 ADD 10,000 CREDITS</button>
                 <div class="debug-option" style="margin-top: 15px;">
                     <label style="color: #00ffff; font-size: 14px; display: block; margin-bottom: 5px;">TEST BOSS (Debug Only):</label>
                     <select id="debug-boss-select" class="cyber-btn small" style="width: 100%; background: #000; color: #00ffff; border: 1px solid #00ffff;">
@@ -132,8 +142,16 @@ export class UIManager {
                         <option value="celestial_eye">CELESTIAL EYE</option>
                     </select>
                 </div>
+
+                <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
+                    <label style="color: #ff00ff; font-size: 14px; display: block; margin-bottom: 10px;">⚡ DEBUG ITEM CHEATS (Give to Player):</label>
+                    <div id="debug-abilities-container" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 250px; overflow-y: auto; padding: 6px; border: 1px solid #333; background: #050505; width: 100%; box-sizing: border-box;">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <div id="debug-ability-msg" style="margin-top: 8px; color: #0f0; font-size: 12px; min-height: 18px;"></div>
+                </div>
             </div>
-            <button id="btn-close-options" class="cyber-btn secondary">CLOSE</button>
+            <button id="btn-close-options" class="cyber-btn secondary" style="margin-top: 10px;">CLOSE</button>
         `);
 
         // Home Screen
@@ -206,6 +224,8 @@ export class UIManager {
                     <!-- Center is now empty or can be used for other things -->
                 </div>
                 <div class="hud-right">
+                    <!-- Hide PAUSE button but keep for future restoration -->
+                    <button id="btn-hud-pause" class="cyber-btn small" style="margin-bottom: 5px; pointer-events: auto; display: none;">PAUSE</button>
                     <!-- Minimap is positioned via CSS -->
                     <div id="kill-counter-container" class="kill-counter-container">
                         <span id="kill-counter-label" class="kill-label">SIGNAL:</span>
@@ -287,6 +307,7 @@ export class UIManager {
                     <div class="result-section" style="text-align: left; padding: 10px 20px; background: rgba(0,0,0,0.3); border-radius: 5px; margin-top: 10px;">
                         <p style="margin: 5px 0; font-size: 16px;">Damage Dealt: <span id="victory-dmg-dealt" style="color: #ffaa00; font-weight: bold; float: right;">0</span></p>
                         <p style="margin: 5px 0; font-size: 16px;">Damage Taken: <span id="victory-dmg-taken" style="color: #ff4444; font-weight: bold; float: right;">0</span></p>
+                        <p style="margin: 5px 0; font-size: 16px;">Money Earned: <span id="victory-run-money" style="color: #ffd700; font-weight: bold; float: right;">0</span></p>
                     </div>
                 </div>
                 <button id="btn-victory-home" class="cyber-btn">RETURN TO HOME</button>
@@ -420,7 +441,21 @@ export class UIManager {
         });
 
         // Options
-        this.bindButton('btn-close-options', () => this.showScreen('title'));
+        this.bindButton('btn-close-options', () => {
+            if (this.isIngameOptions) {
+                this.isIngameOptions = false;
+                this.game.setState('playing');
+            } else {
+                this.showScreen('title');
+                this.game.state = 'title';
+            }
+        });
+
+        // HUD Pause
+        this.bindButton('btn-hud-pause', () => {
+            this.isIngameOptions = true;
+            this.game.setState('options');
+        });
 
         const chkDebug = document.getElementById('chk-debug');
         if (chkDebug) {
@@ -430,11 +465,77 @@ export class UIManager {
             });
         }
 
+        const btnDebugMoney = document.getElementById('btn-debug-money');
+        if (btnDebugMoney) {
+            btnDebugMoney.addEventListener('click', () => {
+                this.game.money = (this.game.money || 0) + 10000;
+                this.game.upgradeSystem.save();
+                console.log('Debug Money Added! Total:', this.game.money);
+                
+                // Update money display on Home Screen
+                const elHome = document.getElementById('player-money');
+                if (elHome) elHome.innerText = this.game.money;
+                
+                // Update money display on SkillTree Screen
+                const elSkill = document.getElementById('skill-money');
+                if (elSkill) elSkill.innerText = this.game.money;
+            });
+        }
+
         const selBoss = document.getElementById('debug-boss-select');
         if (selBoss) {
             selBoss.addEventListener('change', (e) => {
                 this.game.debugBoss = e.target.value;
                 console.log('Debug Boss Set:', this.game.debugBoss);
+            });
+        }
+
+        // Debug: Test Ability Buttons (Dynamic Generation)
+        const container = document.getElementById('debug-abilities-container');
+        if (container) {
+            container.innerHTML = '';
+            const categoryOrder = { red: 1, blue: 2, green: 3, yellow: 4, orange: 5, none: 6 };
+            const sortedRelics = [...this.relics].sort((a, b) => {
+                const catA = categoryOrder[a.category] || 9;
+                const catB = categoryOrder[b.category] || 9;
+                if (catA !== catB) return catA - catB;
+                return a.name.localeCompare(b.name);
+            });
+
+            sortedRelics.forEach(relic => {
+                if (relic.id === 'phoenix_heart_used') return;
+
+                const btn = document.createElement('button');
+                btn.className = 'cyber-btn small debug-ability-btn';
+                btn.style.fontSize = '10px';
+                btn.style.padding = '4px 6px';
+                btn.style.margin = '2px';
+                btn.style.borderColor = relic.color;
+                btn.style.color = relic.color;
+                btn.style.flex = '1 1 auto';
+                btn.style.textAlign = 'center';
+                btn.textContent = relic.name;
+                if (relic.disabled) {
+                    btn.textContent += ' [DIS]';
+                }
+                
+                btn.addEventListener('click', () => {
+                    const msgEl = document.getElementById('debug-ability-msg');
+                    const p = this.game.player;
+                    if (!p) {
+                        if (msgEl) msgEl.textContent = '⚠ ゲームプレイ中のみ使用可能 (Start a run first)';
+                        return;
+                    }
+                    try {
+                        relic.effect(p);
+                        this.game.acquiredRelics.push(relic);
+                        if (msgEl) msgEl.textContent = `✔ Applied: ${relic.name}`;
+                        this.game.audio.playUpgrade();
+                    } catch(err) {
+                        if (msgEl) msgEl.textContent = `✖ Error: ${err.message}`;
+                    }
+                });
+                container.appendChild(btn);
             });
         }
 
@@ -757,8 +858,41 @@ export class UIManager {
         if (predefinedRelics && predefinedRelics.length > 0) {
             choices = predefinedRelics;
         } else {
-            // Fallback: Pick 3 random relics
-            const shuffled = [...this.relics].sort(() => 0.5 - Math.random());
+            // Fallback: Pick 3 random relics, respecting the 5-weapon limit
+            const ATTACK_RELIC_IDS = [
+                'pierce_shot',      // Plasma Orb
+                'multishot',        // Splitter Module
+                'drone',            // Support Drone
+                'missile',          // Missile Pod
+                'satellite_beam',
+                'singularity',
+                'cyber_mine',
+                'railgun',
+                'boomerang_blade',
+                'cyber_fangs'
+            ];
+
+            const ownedAttacks = new Set();
+            ownedAttacks.add('base');
+            if (this.game.acquiredRelics) {
+                this.game.acquiredRelics.forEach(r => {
+                    if (ATTACK_RELIC_IDS.includes(r.id)) {
+                        ownedAttacks.add(r.id);
+                    }
+                });
+            }
+
+            let pool = [...this.relics].filter(r => r.category !== 'none' && !r.disabled);
+            if (ownedAttacks.size >= 5) {
+                pool = pool.filter(r => {
+                    if (ATTACK_RELIC_IDS.includes(r.id)) {
+                        return ownedAttacks.has(r.id);
+                    }
+                    return true;
+                });
+            }
+
+            const shuffled = pool.sort(() => 0.5 - Math.random());
             choices = shuffled.slice(0, 3);
         }
 
@@ -1153,11 +1287,219 @@ export class UIManager {
             ctx.lineTo(cx + 14, cy - 8);
             ctx.lineTo(cx + 10, cy - 12);
             ctx.stroke();
-        } else {
-            // Default Circle
+        } else if (id === 'volatile_core') {
+            // Volatile Core: Spiky ball
             ctx.beginPath();
-            ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+            for (let i = 0; i < 16; i++) {
+                const r = i % 2 === 0 ? 15 : 8;
+                const angle = (i / 16) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.closePath();
             ctx.fill();
+            // Core glow
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (id === 'soul_seekers') {
+            // Soul Seekers: Skull or Wisp
+            ctx.beginPath();
+            ctx.arc(cx, cy - 4, 8, 0, Math.PI * 2);
+            ctx.fill();
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(cx - 8, cy - 4);
+            ctx.quadraticCurveTo(cx - 5, cy + 10, cx, cy + 15);
+            ctx.quadraticCurveTo(cx + 5, cy + 10, cx + 8, cy - 4);
+            ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx - 3, cy - 4, 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + 3, cy - 4, 1.5, 0, Math.PI * 2); ctx.fill();
+        } else if (id === 'chain_lightning') {
+            // Chain Lightning: Lightning bolt
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx + 5, cy - 15);
+            ctx.lineTo(cx - 5, cy);
+            ctx.lineTo(cx + 3, cy);
+            ctx.lineTo(cx - 5, cy + 15);
+            ctx.stroke();
+            // Sparks
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(cx + 10, cy); ctx.lineTo(cx + 15, cy - 5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx - 15, cy + 5); ctx.stroke();
+        } else if (id === 'frost_aura') {
+            // Frost Aura: Snowflake
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * 14, cy + Math.sin(angle) * 14);
+                ctx.stroke();
+                // Spikes
+                const px = cx + Math.cos(angle) * 10;
+                const py = cy + Math.sin(angle) * 10;
+                const a1 = angle + Math.PI / 3;
+                const a2 = angle - Math.PI / 3;
+                ctx.beginPath();
+                ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a1) * 5, py + Math.sin(a1) * 5);
+                ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a2) * 5, py + Math.sin(a2) * 5);
+                ctx.stroke();
+            }
+        } else if (id === 'executioner') {
+            // Executioner: Axe
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 15);
+            ctx.lineTo(cx, cy + 15); // Handle
+            ctx.stroke();
+            // Blade
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 5);
+            ctx.quadraticCurveTo(cx + 12, cy - 10, cx + 15, cy - 5);
+            ctx.lineTo(cx + 15, cy + 5);
+            ctx.quadraticCurveTo(cx + 12, cy + 10, cx, cy + 5);
+            ctx.fill();
+        } else if (id === 'orbital_blades') {
+            // Orbital Blades: Orbiting circles/lines
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+            ctx.stroke();
+            // Blades
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx + Math.cos(angle) * 12, cy + Math.sin(angle) * 12, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (id === 'vampiric_aura') {
+            // Vampiric Aura: Swirl
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            // Spiral
+            ctx.beginPath();
+            for (let i = 0; i < 20; i++) {
+                const r = i / 2;
+                const angle = i / 2;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.stroke();
+        } else if (id === 'satellite_beam') {
+            // Satellite Beam: Circle with crosshair and lines from top
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - 15, cy); ctx.lineTo(cx + 15, cy);
+            ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy + 15);
+            ctx.stroke();
+            // Beam from top
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy - 10);
+            ctx.stroke();
+        } else if (id === 'singularity') {
+            // Singularity: Vortex/Spiral
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < 30; i++) {
+                const r = 15 - i * 0.5;
+                const angle = i * 0.5;
+                ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            }
+            ctx.stroke();
+        } else if (id === 'cyber_mine') {
+            // Cyber Mine: Circle with blinking light and spikes
+            ctx.beginPath();
+            ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // Spikes
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                const angle = (i / 4) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * 12, cy + Math.sin(angle) * 12);
+                ctx.lineTo(cx + Math.cos(angle) * 18, cy + Math.sin(angle) * 18);
+                ctx.stroke();
+            }
+        } else if (id === 'railgun') {
+            // Railgun: Long triangle/line with sparks
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 15, cy);
+            ctx.lineTo(cx + 15, cy);
+            ctx.stroke();
+            // Sparks
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx + 10, cy - 5); ctx.lineTo(cx + 15, cy - 10);
+            ctx.moveTo(cx + 10, cy + 5); ctx.lineTo(cx + 15, cy + 10);
+            ctx.stroke();
+        } else if (id === 'boomerang_blade') {
+            // Boomerang Blade: V-shape
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 12, cy - 8);
+            ctx.lineTo(cx, cy + 12);
+            ctx.lineTo(cx + 12, cy - 8);
+            ctx.stroke();
+        } else if (id === 'drone_swarm') {
+            // Drone Swarm: Multiple small triangles
+            ctx.fillStyle = color;
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                const dx = cx + Math.cos(angle) * 10;
+                const dy = cy + Math.sin(angle) * 10;
+                ctx.beginPath();
+                ctx.moveTo(dx, dy - 4);
+                ctx.lineTo(dx + 4, dy + 4);
+                ctx.lineTo(dx - 4, dy + 4);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else if (id === 'cyber_fangs') {
+            // Cyber Fangs: Multiple triangles pointing up
+            ctx.fillStyle = color;
+            for (let i = 0; i < 3; i++) {
+                const dx = cx - 10 + i * 10;
+                ctx.beginPath();
+                ctx.moveTo(dx, cy + 10);
+                ctx.lineTo(dx + 5, cy - 5);
+                ctx.lineTo(dx + 10, cy + 10);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else {
+            // Default: Cool Hexagon instead of boring circle
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * 15, cy + Math.sin(angle) * 15);
+            }
+            ctx.closePath();
+            ctx.fill();
+            // Inner pattern
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.lineTo(cx + Math.cos(angle) * 8, cy + Math.sin(angle) * 8);
+            }
+            ctx.closePath();
+            ctx.stroke();
         }
     }
 

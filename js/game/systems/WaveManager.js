@@ -91,10 +91,25 @@ export class WaveManager {
         // Spawn the new Boss entity
         const boss = new BossClass(this.game, this.game.player.x, this.game.player.y - 300);
 
+        // Get difficulty setting multipliers (Normal: HP*0.5/Atk*0.3, Hard: HP*0.6/Atk*0.6, Very Hard: HP*1.0/Atk*1.0)
+        let hpMultiplier = 1.0;
+        let damageMultiplier = 1.0;
+        const diffSetting = this.game.selectedDifficulty;
+        if (diffSetting === 'normal') {
+            hpMultiplier = 0.5;
+            damageMultiplier = 0.3;
+        } else if (diffSetting === 'hard') {
+            hpMultiplier = 0.6;
+            damageMultiplier = 0.6;
+        } else if (diffSetting === 'veryhard') {
+            hpMultiplier = 1.0;
+            damageMultiplier = 1.0;
+        }
+
         // Scale Boss stats
-        boss.hp *= this.difficulty;
-        boss.maxHp *= this.difficulty;
-        boss.damage *= this.difficulty;
+        boss.hp *= this.difficulty * hpMultiplier;
+        boss.maxHp *= this.difficulty * hpMultiplier;
+        boss.damage *= this.difficulty * damageMultiplier;
 
         // Map Level Scaling (Make later bosses even tougher)
         const mapLevel = this.game.mapLevel || 1;
@@ -163,14 +178,48 @@ export class WaveManager {
 
     spawnChest() {
         // Spawn chest near player
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 200 + Math.random() * 200;
-        const x = this.game.player.x + Math.cos(angle) * dist;
-        const y = this.game.player.y + Math.sin(angle) * dist;
+        let cx = 0, cy = 0;
+        let chestSpawned = false;
+        let attempts = 0;
 
-        // Clamp to world
-        const cx = Math.max(50, Math.min(x, this.game.worldWidth - 50));
-        const cy = Math.max(50, Math.min(y, this.game.worldHeight - 50));
+        while (!chestSpawned && attempts < 100) {
+            attempts++;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 200 + Math.random() * 200;
+            const x = this.game.player.x + Math.cos(angle) * dist;
+            const y = this.game.player.y + Math.sin(angle) * dist;
+
+            // Clamp to world
+            const tx = Math.max(50, Math.min(x, this.game.worldWidth - 50));
+            const ty = Math.max(50, Math.min(y, this.game.worldHeight - 50));
+
+            // Check collision with obstacles
+            let overlaps = false;
+            if (this.game.obstacles) {
+                for (const obs of this.game.obstacles) {
+                    const odx = tx - obs.x;
+                    const ody = ty - obs.y;
+                    if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) { // Obstacle radius (30) + Chest radius (20) + padding
+                        overlaps = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!overlaps) {
+                cx = tx;
+                cy = ty;
+                chestSpawned = true;
+            }
+        }
+
+        // Fallback in case we couldn't find a free spot in 100 attempts
+        if (!chestSpawned) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 200 + Math.random() * 200;
+            cx = Math.max(50, Math.min(this.game.player.x + Math.cos(angle) * dist, this.game.worldWidth - 50));
+            cy = Math.max(50, Math.min(this.game.player.y + Math.sin(angle) * dist, this.game.worldHeight - 50));
+        }
 
         this.game.chests.push(new Chest(this.game, cx, cy));
         console.log("Chest Spawned!");
@@ -292,11 +341,27 @@ export class WaveManager {
             // HP: 時間経過で指数的に上昇（序盤は控えめ、後半は大きく）
             // difficulty^1.5 で序盤を緩やかに（1.8→1.5に調整）
             const hpScaling = Math.pow(this.difficulty, 1.5);
-            enemyType.hp *= hpScaling;
-            enemyType.maxHp *= hpScaling;
+            
+            // Get difficulty setting multipliers (Normal: HP*0.5/Atk*0.3, Hard: HP*0.6/Atk*0.6, Very Hard: HP*1.0/Atk*1.0)
+            let hpMultiplier = 1.0;
+            let damageMultiplier = 1.0;
+            const diffSetting = this.game.selectedDifficulty;
+            if (diffSetting === 'normal') {
+                hpMultiplier = 0.5;
+                damageMultiplier = 0.3;
+            } else if (diffSetting === 'hard') {
+                hpMultiplier = 0.6;
+                damageMultiplier = 0.6;
+            } else if (diffSetting === 'veryhard') {
+                hpMultiplier = 1.0;
+                damageMultiplier = 1.0;
+            }
+
+            enemyType.hp *= hpScaling * hpMultiplier;
+            enemyType.maxHp *= hpScaling * hpMultiplier;
 
             // Damage: 線形スケーリングのまま（HPほど上げない）
-            enemyType.damage *= this.difficulty;
+            enemyType.damage *= this.difficulty * damageMultiplier;
 
             // Map Level Scaling: 廃止
 

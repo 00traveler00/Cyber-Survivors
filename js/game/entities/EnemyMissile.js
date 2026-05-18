@@ -8,7 +8,7 @@ export class EnemyMissile extends EnemyProjectile {
         this.speed = 162.5; // Increased by 30% from 125
         this.turnSpeed = 2.5;
         this.color = '#ff0000';
-        this.lifeTime = 20.0; // 5x duration
+        this.lifeTime = 5.0;
 
         // Initial random spread
         const angle = Math.atan2(this.vy, this.vx) + (Math.random() - 0.5) * 1.0;

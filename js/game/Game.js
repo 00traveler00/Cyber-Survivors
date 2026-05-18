@@ -15,6 +15,7 @@ import { Drone } from './entities/Drone.js';
 import { NextStageAltar } from './entities/NextStageAltar.js';
 import { SkillTree } from './systems/SkillTree.js';
 import { SkillTreeUI } from '../ui/SkillTreeUI.js';
+import { Missile } from './entities/Missile.js';
 
 export class Game {
     constructor(canvas) {
@@ -167,6 +168,9 @@ export class Game {
 
         // Re-apply upgrades (Base stats)
         this.upgradeSystem.applyUpgrades(this.player);
+        // Sync HP and Shield with upgraded Max values
+        this.player.hp = this.player.maxHp;
+        this.player.shield = this.player.maxShield || 0;
 
         if (preserveStats) {
             // Restore Relics FIRST to establish Max Stats correctly
@@ -210,6 +214,11 @@ export class Game {
             console.log('DEBUG MODE ACTIVE: Super HP enabled!');
         }
 
+        // Reset Slo-Mo & Screen Shake parameters
+        this.timeScale = 1.0;
+        this.sloMoTimer = 0;
+        this.screenShakeIntensity = 0;
+        this.screenShakeDuration = 0;
 
         this.drops = [];
         this.enemyProjectiles = [];
@@ -231,20 +240,18 @@ export class Game {
             }
         }
 
-        // Spawn Initial Chests (Scattered)
-        const rbg = ['red', 'blue', 'green'];
-        for (let i = rbg.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [rbg[i], rbg[j]] = [rbg[j], rbg[i]];
+        // Spawn Initial Chests (Scattered) - Exactly 2 Yellow chests per stage
+        const baseCategories = ['blue', 'green', 'red', 'yellow', 'yellow'];
+        const randomPool = ['blue', 'green', 'red'];
+        let chestCategories = [...baseCategories];
+        
+        // Add 2 random chests from Blue, Green, Red to make a total of 7 chests
+        for (let i = 0; i < 2; i++) {
+            const randomIndex = Math.floor(Math.random() * randomPool.length);
+            chestCategories.push(randomPool[randomIndex]);
         }
         
-        let chestCategories = [
-            'yellow', 'yellow',
-            rbg[0], 
-            rbg[1], rbg[1],
-            rbg[2], rbg[2]
-        ];
-        
+        // Shuffle the 7 categories
         for (let i = chestCategories.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [chestCategories[i], chestCategories[j]] = [chestCategories[j], chestCategories[i]];
@@ -259,9 +266,21 @@ export class Game {
             const dx = x - this.player.x;
             const dy = y - this.player.y;
             if (dx * dx + dy * dy > 40000) {
-                const category = chestCategories[spawnedChests];
-                this.chests.push(new Chest(this, x, y, category));
-                spawnedChests++;
+                // Prevent spawning on top of obstacles
+                let overlaps = false;
+                for (const obs of this.obstacles) {
+                    const odx = x - obs.x;
+                    const ody = y - obs.y;
+                    if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) { // Obstacle radius (30) + Chest radius (20) + padding
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (!overlaps) {
+                    const category = chestCategories[spawnedChests];
+                    this.chests.push(new Chest(this, x, y, category));
+                    spawnedChests++;
+                }
             }
         }
 
@@ -278,8 +297,20 @@ export class Game {
                 const dx = x - this.player.x;
                 const dy = y - this.player.y;
                 if (dx * dx + dy * dy > 40000) {
-                    this.chests.push(new Chest(this, x, y, 'orange'));
-                    orangeSpawned = true;
+                    // Prevent spawning on top of obstacles
+                    let overlaps = false;
+                    for (const obs of this.obstacles) {
+                        const odx = x - obs.x;
+                        const ody = y - obs.y;
+                        if (Math.sqrt(odx * odx + ody * ody) < obs.radius + 35) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+                    if (!overlaps) {
+                        this.chests.push(new Chest(this, x, y, 'orange'));
+                        orangeSpawned = true;
+                    }
                 }
             }
         }
@@ -301,13 +332,51 @@ export class Game {
     }
 
     update(dt) {
+        // Real-time timers (unscaled by slo-mo)
+        if (this.sloMoTimer && this.sloMoTimer > 0) {
+            this.sloMoTimer -= dt;
+            if (this.sloMoTimer <= 0) {
+                this.timeScale = 1.0;
+            }
+        }
+        if (this.screenShakeDuration > 0) {
+            this.screenShakeDuration -= dt;
+            if (this.screenShakeDuration <= 0) {
+                this.screenShakeIntensity = 0;
+            }
+        }
+
         if (this.state === 'skilltree') {
             if (this.skillTreeUI) this.skillTreeUI.update(dt);
             return;
         }
         if (this.state === 'reward') return; // Pause for reward selection
 
+        if (this.state === 'dying') {
+            this.deathTimer += dt;
+            
+            // Keep updating particles so they explode outwards beautifully!
+            this.particles.forEach(p => p.update(dt));
+            this.particles = this.particles.filter(p => p.life > 0);
+            
+            // Keep updating floating texts
+            this.floatingTexts.forEach(t => t.update(dt));
+            this.floatingTexts = this.floatingTexts.filter(t => t.life > 0);
+
+            // Camera stays on player position
+            if (this.player) {
+                this.updateCamera();
+            }
+
+            if (this.deathTimer >= 2.0) {
+                this.triggerGameOverScreen();
+            }
+            return;
+        }
+
         if (this.state === 'playing') {
+            // Scale dt for all gameplay updates inside this block to achieve slow-motion beautifully!
+            dt = dt * (this.timeScale || 1.0);
             if (this.player) {
                 this.player.update(dt);
                 this.updateCamera();
@@ -329,8 +398,11 @@ export class Game {
             this.drops.forEach(d => d.update(dt));
             this.drops = this.drops.filter(d => !d.markedForDeletion);
 
-            this.enemyProjectiles.forEach(p => p.update(dt));
-            this.enemyProjectiles = this.enemyProjectiles.filter(p => !p.markedForDeletion);
+            // Update enemy projectiles (skip if time is stopped)
+            if (!(this.timeStopTimer && this.timeStopTimer > 0)) {
+                this.enemyProjectiles.forEach(p => p.update(dt));
+                this.enemyProjectiles = this.enemyProjectiles.filter(p => !p.markedForDeletion);
+            }
 
             this.chests.forEach(c => c.update(dt));
 
@@ -341,7 +413,15 @@ export class Game {
             this.floatingTexts = this.floatingTexts.filter(t => !t.markedForDeletion);
 
             this.obstacles.forEach(o => o.update(dt));
-            this.drones.forEach(d => d.update(dt));
+            
+            this.drones.forEach(d => {
+                d.update(dt);
+                if (d.life !== undefined) {
+                    d.life -= dt;
+                    if (d.life <= 0) d.markedForDeletion = true;
+                }
+            });
+            this.drones = this.drones.filter(d => !d.markedForDeletion);
 
             // HP Regeneration (Nano Repair)
             if (this.player && this.player.hpRegen && this.player.hp < this.player.maxHp) {
@@ -440,17 +520,20 @@ export class Game {
                 // Orange Items: On Player Hit
                 if (dmg > 0 && this.player.hp > 0) {
                     if (this.player.hasRevengeProtocol) {
+                        const sizeScale = this.player.projectileSize || 1;
+                        const radius = 150 * sizeScale;
+                        const dmg = Math.round(this.player.damage * 5.0);
                         this.waveManager.enemies.forEach(e => {
                             const edx = e.x - this.player.x;
                             const edy = e.y - this.player.y;
                             const edist = Math.sqrt(edx*edx + edy*edy);
-                            if (edist < 150) {
-                                e.takeDamage(50);
-                                this.showDamage(e.x, e.y, "50", '#ff6600');
+                            if (edist < radius) {
+                                e.takeDamage(dmg);
+                                this.showDamage(e.x, e.y, dmg.toString(), '#ff6600');
                                 // Lightning effect to each enemy
                                 for(let i=0; i<5; i++) {
                                     const p = new Particle(this, this.player.x + (e.x - this.player.x)*Math.random(), this.player.y + (e.y - this.player.y)*Math.random(), '#ffaa00');
-                                    p.size = 4;
+                                    p.size = 4 * sizeScale;
                                     this.particles.push(p);
                                 }
                             }
@@ -458,9 +541,9 @@ export class Game {
                         // Big Shockwave
                         for(let i=0; i<30; i++) {
                             const p = new Particle(this, this.player.x, this.player.y, '#ff6600');
-                            p.size = 5;
-                            p.vx *= 3;
-                            p.vy *= 3;
+                            p.size = 5 * sizeScale;
+                            p.vx *= 3 * sizeScale;
+                            p.vy *= 3 * sizeScale;
                             this.particles.push(p);
                         }
                     }
@@ -470,8 +553,9 @@ export class Game {
                             const edy = e.y - this.player.y;
                             const edist = Math.sqrt(edx*edx + edy*edy);
                             if (edist < 150 && edist > 0) {
-                                e.x += (edx/edist) * 100;
-                                e.y += (edy/edist) * 100;
+                                // Apply smooth knockback velocity
+                                e.knockbackX = (edx / edist) * 2000;
+                                e.knockbackY = (edy / edist) * 2000;
                             }
                         });
                         // Blue Repulsion Wave
@@ -484,13 +568,19 @@ export class Game {
                         }
                     }
                     if (this.player.hasHoloDecoy) {
+                        this.player.decoys = this.player.decoys || [];
+                        this.player.decoys.push({
+                            x: this.player.x,
+                            y: this.player.y,
+                            lifeTime: 5.0
+                        });
                         for(let i=0; i<20; i++) {
                             const p = new Particle(this, this.player.x, this.player.y, '#00ffff');
                             p.size = 4;
                             p.vx *= 0.2; // Slow fading particles
                             p.vy *= 0.2;
-                            p.life = 2.0; // Last longer
-                            p.decay = 0.5;
+                            p.life = 1.0; 
+                            p.decay = 0.2; // Lasts exactly 5.0s (1.0 / 0.2)
                             this.particles.push(p);
                         }
                     }
@@ -647,16 +737,6 @@ export class Game {
                             }
                         }
 
-                        // Vampire Fang: Chance-based life steal on hit
-                        if (this.player.lifeStealChance) {
-                            // Roll for heal chance
-                            const roll = Math.random();
-                            if (roll < this.player.lifeStealChance) {
-                                const healAmount = 1; // Always heal 1 HP on success
-                                this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmount);
-                                this.showDamage(this.player.x, this.player.y - 30, '+' + healAmount, '#00ff00');
-                            }
-                        }
 
                         // Legacy Flat Lifesteal (if still exists for compatibility)
                         if (this.player.lifeStealFlat) {
@@ -733,6 +813,51 @@ export class Game {
     openChest(chest) {
         console.log("Chest Opened!");
         this.currentChest = chest; // Track this chest
+        
+        // Enforce the 5 attack method limit dynamically while keeping pre-rolled choices fixed!
+        const ATTACK_RELIC_IDS = [
+            'pierce_shot',      // Plasma Orb
+            'multishot',        // Splitter Module
+            'drone',            // Support Drone
+            'missile',          // Missile Pod
+            'satellite_beam',
+            'singularity',
+            'cyber_mine',
+            'railgun',
+            'boomerang_blade',
+            'cyber_fangs'
+        ];
+
+        const ownedAttacks = new Set();
+        ownedAttacks.add('base');
+        if (this.acquiredRelics) {
+            this.acquiredRelics.forEach(r => {
+                if (ATTACK_RELIC_IDS.includes(r.id)) {
+                    ownedAttacks.add(r.id);
+                }
+            });
+        }
+
+        // If player already has 5 or more attack types, replace any forbidden new yellow attacks in the chest
+        if (ownedAttacks.size >= 5) {
+            chest.contents = chest.contents.map(relic => {
+                if (ATTACK_RELIC_IDS.includes(relic.id) && !ownedAttacks.has(relic.id)) {
+                    // Find a random allowed replacement relic (MUST be an owned yellow attack to maintain category integrity)
+                    const allowedRelics = this.ui.relics.filter(r => {
+                        if (r.category === 'none' || r.disabled) return false;
+                        if (ATTACK_RELIC_IDS.includes(r.id)) {
+                            return ownedAttacks.has(r.id);
+                        }
+                        return false; // Do not allow other categories (Red, Blue, Green) to leak into Yellow weapon replacements!
+                    });
+                    if (allowedRelics.length > 0) {
+                        return { ...allowedRelics[Math.floor(Math.random() * allowedRelics.length)] };
+                    }
+                }
+                return relic;
+            });
+        }
+        
         this.audio.playLevelUp(); // Sound effect
         this.setState('reward');
         this.ui.showRewardSelection(chest.contents, chest.difficulty);
@@ -783,7 +908,7 @@ export class Game {
         this.drops.push(new Drop(this, enemy.x, enemy.y, 'energy', dropValue));
         
         // Orange Item: Midas Touch
-        if (this.player.hasMidasTouch && Math.random() < 0.1) {
+        if (this.player.hasMidasTouch && Math.random() < 0.05) {
             this.drops.push(new Drop(this, enemy.x + 10, enemy.y + 10, 'energy', dropValue * 5));
             // Flashy Gold Particles
             for(let i=0; i<15; i++) {
@@ -802,13 +927,16 @@ export class Game {
         
         // Orange Items: On Enemy Kill
         if (this.player.hasVolatileCore) {
+            const sizeScale = this.player.projectileSize || 1;
+            const radius = 100 * sizeScale;
+            const dmg = Math.round(this.player.damage * 3.0);
             this.waveManager.enemies.forEach(e => {
                 if (e === enemy || e.markedForDeletion) return;
                 const edx = e.x - enemy.x;
                 const edy = e.y - enemy.y;
-                if (edx*edx + edy*edy < 10000) { // 100px radius
-                    e.takeDamage(30);
-                    this.showDamage(e.x, e.y, "30", '#ff5500');
+                if (edx*edx + edy*edy < radius * radius) {
+                    e.takeDamage(dmg);
+                    this.showDamage(e.x, e.y, dmg.toString(), '#ff5500');
                     if (e.hp <= 0) this.processEnemyDeath(e);
                 }
             });
@@ -817,24 +945,41 @@ export class Game {
                 const colors = ['#ff5500', '#ff0000', '#ffff00', '#ffffff'];
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 const p = new Particle(this, enemy.x, enemy.y, color);
-                p.size = Math.random() * 5 + 3;
-                p.vx *= 2.5;
-                p.vy *= 2.5;
+                p.size = (Math.random() * 5 + 3) * sizeScale;
+                p.vx *= 2.5 * sizeScale;
+                p.vy *= 2.5 * sizeScale;
                 this.particles.push(p);
             }
         }
         
         if (this.player.hasSoulSeekers) {
-            const target = this.player.findNearestEnemy();
-            if (target && !target.markedForDeletion) {
-                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target, 15));
-                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target, 15));
-                // Flashy Missile Spawn Particles
-                for(let i=0; i<20; i++) {
-                    const p = new Particle(this, enemy.x, enemy.y, '#ff8800');
-                    p.size = 3;
-                    this.particles.push(p);
+            // Find enemy closest to the DYING enemy (instead of player)
+            let target = null;
+            let minDist = Infinity;
+            this.waveManager.enemies.forEach(e => {
+                if (e === enemy || e.markedForDeletion) return;
+                const dx = e.x - enemy.x;
+                const dy = e.y - enemy.y;
+                const dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    target = e;
                 }
+            });
+
+            if (target) {
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target));
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, target));
+            } else {
+                // If no target, create missiles that just fly up or random direction
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, { x: enemy.x, y: enemy.y - 100 }));
+                this.player.projectiles.push(new Missile(this, enemy.x, enemy.y, { x: enemy.x, y: enemy.y + 100 }));
+            }
+            // Flashy Missile Spawn Particles
+            for(let i=0; i<20; i++) {
+                const p = new Particle(this, enemy.x, enemy.y, '#ff8800');
+                p.size = 3;
+                this.particles.push(p);
             }
         }
 
@@ -845,12 +990,10 @@ export class Game {
 
     addOrbitalBlades() {
         if (!this.player) return;
-        if (!this.player.orbitalBlades) {
-            this.player.orbitalBlades = [];
+        this.player.orbitalBlades = [];
+        for (let i = 0; i < 6; i++) {
+            this.player.orbitalBlades.push({ angle: (Math.PI * 2 / 6) * i });
         }
-        // Add 2 blades at a time
-        this.player.orbitalBlades.push({ angle: 0 });
-        this.player.orbitalBlades.push({ angle: Math.PI });
     }
 
     draw() {
@@ -863,9 +1006,17 @@ export class Game {
         this.ctx.fillStyle = '#101018';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        if (this.state === 'playing' || this.state === 'reward') {
+        if (this.state === 'playing' || this.state === 'reward' || this.state === 'dying') {
             this.ctx.save();
-            this.ctx.translate(-this.camera.x, -this.camera.y);
+            
+            // Apply Screen Shake if active
+            let shakeX = 0;
+            let shakeY = 0;
+            if (this.screenShakeDuration > 0) {
+                shakeX = (Math.random() - 0.5) * this.screenShakeIntensity;
+                shakeY = (Math.random() - 0.5) * this.screenShakeIntensity;
+            }
+            this.ctx.translate(-this.camera.x + shakeX, -this.camera.y + shakeY);
 
             this.drawBackground();
             this.drawGrid();
@@ -878,7 +1029,8 @@ export class Game {
             this.chests.forEach(c => c.draw(this.ctx));
             this.drops.forEach(d => d.draw(this.ctx));
 
-            if (this.player) this.player.draw(this.ctx);
+            // Draw player only if NOT in dying state (to look like they exploded completely!)
+            if (this.player && this.state !== 'dying') this.player.draw(this.ctx);
             if (this.waveManager) this.waveManager.draw(this.ctx);
 
             if (this.nextStageAltar) this.nextStageAltar.draw(this.ctx);
@@ -912,6 +1064,15 @@ export class Game {
                 if (this.nextStageAltar) {
                     this.drawDirectionalArrow(this.nextStageAltar.x, this.nextStageAltar.y, '#00ffff', 'EXIT');
                 }
+            }
+
+            // Dying Fade to Black Effect (Screen space overlay)
+            if (this.state === 'dying') {
+                const alpha = Math.min(1.0, this.deathTimer / 2.0); // Fades completely over 2.0s
+                this.ctx.save();
+                this.ctx.fillStyle = `rgba(16, 16, 24, ${alpha})`; // Blends beautifully to match the canvas clear color
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.restore();
             }
         } else {
             this.drawGrid(); // Static grid for menus
@@ -1244,10 +1405,44 @@ export class Game {
 
     bossDefeated() {
         console.log("BOSS DEFEATED!");
-        this.audio.playLevelUp(); // Victory sound
+
+        // 1. Screen Shake (15px intensity for 1.2s)
+        this.screenShakeIntensity = 15;
+        this.screenShakeDuration = 1.2;
+
+        // 2. Slow Motion (Time Scale 0.15 for 2.0s of real time)
+        this.timeScale = 0.15;
+        this.sloMoTimer = 2.0;
+
+        // 3. Audio Explosion + Level Up Sound
+        if (this.audio) {
+            this.audio.playLevelUp();
+            this.audio._playOneShot('sawtooth', 400, 0.6, 1.5, 0.01, 30);
+            this.audio._playOneShot('triangle', 200, 0.6, 1.5, 0.01, 10);
+            this.audio._playOneShot('sine', 1000, 0.3, 0.8, 0.01, 200); // Dramatic synth slide
+        }
 
         // Stop Spawning
         this.waveManager.stopSpawning();
+
+        // 4. Find boss position and spawn MEGA particles explosion!
+        const boss = this.waveManager.enemies.find(e => e.isBoss) || { x: this.player.x, y: this.player.y - 150 };
+        const bx = boss.x;
+        const by = boss.y;
+
+        const bossColors = ['#ff00ff', '#ff5500', '#ffff00', '#00ffff', '#ffffff'];
+        for (let i = 0; i < 200; i++) {
+            const color = bossColors[Math.floor(Math.random() * bossColors.length)];
+            const p = new Particle(this, bx, by, color);
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 200 + Math.random() * 800;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+            p.size = Math.random() * 8 + 4; // Big chunks of boss debris!
+            p.life = 0.8 + Math.random() * 1.8;
+            p.maxLife = p.life;
+            this.particles.push(p);
+        }
 
         // Spawn Next Stage Altar at the location where the boss altar was
         const pos = this.waveManager.bossAltarPos;
@@ -1263,8 +1458,21 @@ export class Game {
 
 
     getStageReward(stageNum) {
-        // Stage 1: 100, Stage 2: 150, Stage 3: 200, ...
-        return 100 + (stageNum - 1) * 50;
+        // Base Stage Reward: Stage 1: 100, Stage 2: 150, Stage 3: 200, ...
+        const base = 100 + (stageNum - 1) * 50;
+
+        // Difficulty Bonus Multiplier
+        let diffMultiplier = 1.0;
+        if (this.selectedDifficulty === 'hard') diffMultiplier = 1.5;
+        else if (this.selectedDifficulty === 'veryhard') diffMultiplier = 2.0;
+
+        // Skill Tree (Lucky Coin) Bonus
+        let skillBonus = 1.0;
+        if (this.player && this.player.moneyBonus) {
+            skillBonus = this.player.moneyBonus;
+        }
+
+        return Math.floor(base * diffMultiplier * skillBonus);
     }
 
     nextStage() {
@@ -1334,6 +1542,8 @@ export class Game {
         this.setState('victory');
         document.getElementById('victory-ene').innerText = this.totalEneCollected;
         document.getElementById('victory-money').innerText = this.runMoney;
+        const vicRunMoney = document.getElementById('victory-run-money');
+        if (vicRunMoney) vicRunMoney.innerText = this.runMoney;
         document.getElementById('victory-dmg-dealt').innerText = Math.round(this.totalDamageDealt || 0);
         document.getElementById('victory-dmg-taken').innerText = Math.round(this.totalDamageTaken || 0);
 
@@ -1489,6 +1699,35 @@ export class Game {
             return; // Don't actually game over
         }
 
+        // --- NEW DEATH PERFORMANCE STATE ---
+        if (this.state !== 'dying') {
+            this.state = 'dying';
+            this.deathTimer = 0;
+
+            // Dramatic exploding sawtooth & triangle SFX
+            if (this.audio) {
+                this.audio._playOneShot('sawtooth', 300, 0.4, 1.2, 0.01, 40);
+                this.audio._playOneShot('triangle', 150, 0.4, 1.2, 0.01, 20);
+            }
+
+            // Cyber exploding particles
+            const particleColors = ['#ff00ff', '#00ffff', '#ffff00', '#ffffff'];
+            for (let i = 0; i < 150; i++) {
+                const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+                const p = new Particle(this, this.player.x, this.player.y, color);
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 150 + Math.random() * 600;
+                p.vx = Math.cos(angle) * speed;
+                p.vy = Math.sin(angle) * speed;
+                p.life = 0.5 + Math.random() * 1.5;
+                p.maxLife = p.life;
+                p.size = Math.random() * 5 + 3;
+                this.particles.push(p);
+            }
+        }
+    }
+
+    triggerGameOverScreen() {
         // ステージクリア失敗時の報酬を計算
         const stageReward = this.getStageReward(this.mapLevel);
         const failRate = (this.mapLevel === 1) ? 0.1 : 0.5;
@@ -1501,8 +1740,10 @@ export class Game {
 
         this.setState('gameover');
         this.ui.updateGameOverStats(this.totalEneCollected, this.killCount, this.acquiredRelics, this.mapLevel, this.loopCount, this.runMoney);
-        document.getElementById('go-dmg-dealt').innerText = Math.round(this.totalDamageDealt || 0);
-        document.getElementById('go-dmg-taken').innerText = Math.round(this.totalDamageTaken || 0);
+        const elDealt = document.getElementById('go-dmg-dealt');
+        if (elDealt) elDealt.innerText = Math.round(this.totalDamageDealt || 0);
+        const elTaken = document.getElementById('go-dmg-taken');
+        if (elTaken) elTaken.innerText = Math.round(this.totalDamageTaken || 0);
         // Reset map level on game over
         this.mapLevel = 1;
     }
